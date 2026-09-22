@@ -60,6 +60,11 @@ end
         @test norm(R) / norm(A * Q) ≤ 1.0e-10
     end
 
+    @testset "circle contour quadrature sanity" begin
+        a = 1.0 + 1.0im
+        @test isapprox(quad_test(exp, a, 1.0, 80), exp(a); rtol = 1.0e-12, atol = 1.0e-12)
+    end
+
     @testset "krylov_approx(exp, A, b) accuracy" begin
         n = 10
 

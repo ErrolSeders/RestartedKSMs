@@ -1,8 +1,6 @@
 module KrylovRestart
 
-#using RationalFunctionApproximation
-#using ComplexRegions
-using FastGaussQuadrature: gausslegendre
+using ComplexQuadrature
 using LinearAlgebra
 using SparseArrays
 using KrylovKit
@@ -18,13 +16,16 @@ include("./utils.jl")
 include("./lanczos.jl")
 include("./arnoldi.jl")
 include("./rationalapprox.jl")
-include("./quadrature_utils.jl")
+include("./stieltjes.jl")
 include("./krylov_approximation.jl")
 
 export RationalApproximation, bestapprox_expm_data
+export StieltjesFunction, inverse_pth_root
 export arnoldi, lanczos
 export StopCode, Trace, TraceType, krylov_approx
 export krylov_approx_quad, krylov_approx_quad2, message
-export krylov_approx_chen_implicit, krylov_approx_chen_explicit, reset!
+export krylov_approx_chen_explicit, krylov_approx_chen_implicit,
+    krylov_approx_chen_implicit_2, quad_test
+export log_metric!, log_value!, reset!
 
 end # module KrylovRestart

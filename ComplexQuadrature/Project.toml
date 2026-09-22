@@ -1,0 +1,12 @@
+name = "ComplexQuadrature"
+uuid = "d994cb74-9adc-4039-b3b7-8c2379cdb0be"
+version = "0.1.0"
+authors = ["Errol Seders <errolseders@gmail.com>"]
+
+[deps]
+FastGaussQuadrature = "442a2c76-b920-505d-bb47-c5924d526838"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+
+[compat]
+FastGaussQuadrature = "1.3.0"
+LinearAlgebra = "1.12.0"

@@ -4,6 +4,9 @@ function unit_vector(T::Type, size::Int, pos::Int)
     return unit
 end
 
+geteps(z) = z |> real |> typeof |> eps
+geteps(A::AbstractArray) = A |> eltype |> real |> eps
+
 function Base.show(io::IO, tr::Trace)
     return print(io, "Trace(restarts=$(tr.restarts), stop=$(isnothing(tr.stop) ? "nothing" : tr.stop), metrics=$(length(tr.metrics)))")
 end
@@ -23,7 +26,7 @@ function Base.show(io::IO, ::MIME"text/plain", tr::Trace)
     end
 
     println(io, "  metrics:")
-    for key in sort!(collect(keys(tr.data)))
+    for key in sort!(collect(keys(tr.metrics)))
         values = tr.metrics[key]
         n = length(values)
         print(io, "    - ", key, ": ", n, " entr", n == 1 ? "y" : "ies")

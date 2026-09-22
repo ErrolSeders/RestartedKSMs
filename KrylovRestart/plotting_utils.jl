@@ -11,6 +11,20 @@ begin
     using CairoMakie
 end
 
+function plot_complex(z::AbstractVector{<:Complex})
+    fig = Figure()
+    ax = Axis(
+        fig[1, 1],
+        xlabel = "Real",
+        ylabel = "Imaginary",
+        aspect = DataAspect(),
+    )
+
+    scatter!(ax, real.(z), imag.(z))
+
+    return fig
+end
+
 into_df(tr::Trace) = into_df(Val(tr.type), tr)
 
 

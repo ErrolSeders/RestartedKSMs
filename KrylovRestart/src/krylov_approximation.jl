@@ -8,12 +8,13 @@ function _update_alphas(α1, α2, H)
         λ = s .|> real |> maximum
     end
     return min(μ, α1), max(λ, α2)
+
 end
 
 """
 Check whether the inputs conform to expected sizes.
 `A` is square of dim `n x n`, `b` is of length `n`
-and `exact` is of length `n` if provided. 
+and `exact` is of length `n` if provided.
 """
 function _check_sizes(exact, A, b)
     !(size(A, 1) == size(A, 2)) && throw(ArgumentError(lazy"Matrix A must be square"))
@@ -119,7 +120,7 @@ function krylov_approx(
     Tdefault = float(real(eltype(A)))
     tol = isnothing(tol) ? eps(Tdefault) : tol
 
-    real_res = eltype(A) <: Real && eltype(b) <: Real
+    real_res = (eltype(A) <: AbstractFloat) && (eltype(b) <: AbstractFloat)
 
     # state for the linear-convergence-based stopping rules
     up_decay = DecayTracker()
@@ -164,6 +165,8 @@ function krylov_approx(
         η_prev = η
 
         @views h = f(Hhat)[((k - 1) * m + 1):((k - 1) * m + m), 1]
+
+        log_metric!(trace, :update_norm, norm(h))
 
         if real_res
             h = h .|> real
@@ -249,7 +252,7 @@ function krylov_approx(
 
     set_type!(trace, KrylovApproxRational)
 
-    log_value!(tr, :restart_length, m)
+    log_value!(trace, :restart_length, m)
 
     Tdefault = float(real(eltype(A)))
     tol = isnothing(tol) ? eps(Tdefault) : tol
@@ -275,7 +278,6 @@ function krylov_approx(
 
     Bbar = _init_Bbar(poles, m)
     s = one(eltype(Bbar))
-    e1 = unit_vector(eltype(A), m + 2, 1)
 
     is_A_hermitian = ishermitian(A)
 
@@ -296,6 +298,8 @@ function krylov_approx(
         _update_Bbar!(Bbar, Hbar, poles, s, m)
 
         h = _update_vector(Bbar, n_single, poles, coeff, m)
+
+        log_metric!(trace, :update_norm, norm(h))
 
         s = η
 
@@ -322,13 +326,73 @@ function krylov_approx(
     return fk
 end
 
-"""
-    integral_error_correction(f,H,Hs,ηs,order,contour_safety)
+function _initialize_krylov_approx_quad(f, A, b, m, order)
 
-    evaluate the integral formulation for the error term at the transformed quadrature points
+    β = norm(b)
+
+    qm = (1 / β) * b
+    is_A_hermitian = ishermitian(A)
+
+    (Q, H, η, qm) = is_A_hermitian ? lanczos(A, qm, m) : arnoldi(A, qm, m)
+
+    Hs = Vector([H])
+    ηs = [η]
+
+    h = f(H)[:, 1]
+    fk = β * Q * h
+
+    e1 = unit_vector(eltype(H), m, 1)
+
+    quad1::Int64 = order
+    quad2::Int64 = round(sqrt(2) * quad1)
+
+    h2 = h
+
+    return β, qm, is_A_hermitian, Q, H, Hs, η, ηs, e1, quad1, quad2, h2, fk
+end
+
+function _check_quad_err(err, tol, quad1, quad2, accurate, refined)
+    if err < tol
+        accurate = true
+    else
+        quad1 = quad2
+        quad2 = round(sqrt(2) * quad1) |> Int
+        refined = true
+    end
+
+    return quad1, quad2, accurate, refined
+end
+
+function _check_exact_err(exact, fk, trace)
+    if !(exact === nothing || isempty(exact))
+        abs_err = norm(exact - fk)
+        log_metric!(trace, :abs_err, abs_err)
+    end
+
+    return nothing
+end
+
+function _refine_quad_order(refined, quad1, quad2)
+    if !refined
+        quad2 = quad1
+        quad1 = round(quad2 / sqrt(2)) |> Int
+    end
+
+    return quad1, quad2
+end
+
+function _check_quad_order_divergence(quad1, quad2, maxorder, trace)
+    if quad2 >= maxorder || quad1 >= maxorder
+        log_value!(trace, :diverged, quad2)
+        return QuadOrderDivergence
+    end
+    return nothing
+end
+
+_NaNcheck(err) = isnan(err) ? QuadErrorDivergence : nothing
 
 """
-function _integral_error_correction(
+    _integral_error_correction(
         f::Function,
         H::AbstractArray,
         Hs,
@@ -339,9 +403,20 @@ function _integral_error_correction(
         e1
     )
 
-    m = size(H, 1)
+    evaluate the integral formulation for the error term at the transformed quadrature points
 
-    x, w = contour_quad_nodes_trapezoid(order, R, c)
+"""
+function _integral_error_correction(
+        f::Function,
+        H::AbstractArray,
+        Hs,
+        ηs::AbstractVector,
+        x,
+        w,
+        e1
+    )
+
+    m = size(H, 1)
 
     S = zeros(ComplexF64, m)
 
@@ -353,13 +428,27 @@ function _integral_error_correction(
             ηs[j] * ((t * I - Hs[j]) \ e1)[end] for j in eachindex(ηs)
         )
 
-        S += ω * f(t) * ϕ * y
+
+        S += (1 / (2π * 1im)) * ω * f(t) * ϕ * y
     end
     return S
 end
 
 """
-    krylov_approx_quad(f,A,b,)
+    krylov_approx_quad(
+        f::Function,
+        A::AbstractArray,
+        b::AbstractVector,
+        m::Int
+        ;
+        tol = 1.0e-16,
+        max_restarts = 200,
+        contour_safety = 2.0,
+        order = 8,
+        maxorder = 20000,
+        trace::Union{Nothing, Trace} = nothing,
+        exact::Union{Nothing, AbstractVector} = nothing
+    )
 
 Approximate ``f(A)b`` by Krylov subsapce method with a quadrature formulation of the error.
 Here we assume that the function `f` is holomorphic in a neighborhood around the spectrum of `A`. In this case
@@ -372,40 +461,41 @@ function krylov_approx_quad(
         b::AbstractVector,
         m::Int
         ;
-        tol = 1.0e-16,
+        quad_tol = 1.0e-12,
+        stop_tol = 1.0e-16,
         max_restarts = 200,
-        contour_safety = 2.0,
+        contour_safety = 1.1,
+        order = 8,
+        maxorder = 20000,
+        contour_type::Type{<:AbstractContour} = CircleContour,
+        rebuild_contour = true,
         trace::Union{Nothing, Trace} = nothing,
+        contour_override::Union{Nothing, AbstractContour} = nothing,
         exact::Union{Nothing, AbstractVector} = nothing
     )
+
+    real_res = (eltype(A) <: AbstractFloat) && (eltype(b) <: AbstractFloat)
 
     _check_sizes(exact, A, b)
 
     set_type!(trace, Quadrature1)
     log_value!(trace, :restart_length, m)
 
-    β = norm(b)
 
-    qm = (1 / β) * b
-    is_A_hermitian = ishermitian(A)
+    β, qm, is_A_hermitian,
+        Q, H, Hs, _, ηs, e1,
+        quad1, quad2, h2, fk = _initialize_krylov_approx_quad(f, A, b, m, order)
 
-    (Q, H, η, qm) = is_A_hermitian ? lanczos(A, qm, m) : arnoldi(A, qm, m)
+    _check_exact_err(exact, fk, trace)
 
-    Hs = Vector([H])
-    ηs = [η]
+    contour = isnothing(contour_override) ?
+        begin
+            ritz, _ = eigen(H)
+            build(contour_type, ritz, contour_safety)
+        end : contour_override
 
-    h = f(H)[1, :]
-    fk = β * Q * h
+    update_norm_prev = Inf
 
-    e1 = unit_vector(eltype(H), m, 1)
-
-    # For the integral we throw a circular contour around the initial ritz values
-    R, c = fetch_contour_circle(H, contour_safety)
-
-    quad1::Int64 = 8
-    quad2::Int64 = round(sqrt(2) * quad1)
-
-    h2 = h
     for k in 2:max_restarts
 
         set_restart!(trace, k)
@@ -413,85 +503,260 @@ function krylov_approx_quad(
         #@info "Iteration $_k"
         (Q, H, η, qm) = is_A_hermitian ? lanczos(A, qm, m) : arnoldi(A, qm, m)
 
+        if isnothing(contour_override) && rebuild_contour
+            append!(ritz, first(eigen(H)))
+            contour = build(contour_type, ritz, contour_safety)
+        end
+
         accurate = false
         refined = false
 
         while !accurate
 
+            if !isnothing(_check_quad_order_divergence(quad1, quad2, maxorder, trace))
+                isnothing(trace) && throw(ErrorException(lazy"quadrature order exceeded allowence"))
+                set_stop!(trace, QuadOrderDivergence)
+                return fk
+            end
+
             log_metric!(trace, :quad1_order, quad1)
             log_metric!(trace, :quad2_order, quad2)
 
-            h1 = _integral_error_correction(f, H, Hs, ηs, quad1, R, c, e1)
-            h2 = _integral_error_correction(f, H, Hs, ηs, quad2, R, c, e1)
+            x1, w1 = resolve(contour, quad1)
+            x2, w2 = resolve(contour, quad2)
+            h1 = _integral_error_correction(f, H, Hs, ηs, x1, w1, e1)
+            h2 = _integral_error_correction(f, H, Hs, ηs, x2, w2, e1)
 
             err = norm(h2 - h1)
             log_metric!(trace, :quad_err, err)
-
-            isnan(err) && throw(OverflowError(lazy"Quadrature error diverged!"))
-
-            if err < tol
-                accurate = true
-            else
-                quad1 = quad2
-                quad2 = round(sqrt(2) * quad1)
-                refined = true
+            if !isnothing(_NaNcheck(err))
+                isnothing(trace) && throw(OverflowError(lazy"quadrature error diverged to NaN"))
+                set_stop!(trace, QuadErrorDivergence)
+                return real_res ? fk .|> real : fk
             end
+
+            quad1, quad2, accurate, refined = _check_quad_err(err, quad_tol, quad1, quad2, accurate, refined)
         end
 
         update = β * Q * h2
 
-        fk += update
-
-        if !(exact === nothing || isempty(exact))
-            abs_err = norm(exact - fk)
-            log_metric!(trace, :abs_err, abs_err)
-        end
-
         update_norm = norm(update)
         log_metric!(trace, :update_norm, update_norm)
-        if update_norm < tol
+        if (10 * update_norm_prev) < update_norm
+            set_stop!(trace, UpdateNormDivergence)
+            return real_res ? fk .|> real : fk
+        end
+
+        update_norm_prev = update_norm
+
+        fk += update
+
+        _check_exact_err(exact, fk, trace)
+
+        if update_norm < stop_tol
             set_stop!(trace, UpdateAcc)
-            return fk
+            return real_res ? fk .|> real : fk
         end
 
         push!(Hs, H)
         push!(ηs, η)
 
-        if !refined
-            quad2 = quad1
-            quad1 = round(quad2 / sqrt(2))
-        end
+        quad1, quad2 = _refine_quad_order(refined, quad1, quad2)
+
     end
     set_stop!(trace, MaxRestarts)
-    return fk
+    return real_res ? fk .|> real : fk
 end
 
-function _make_integral_function(f, H, Hs, ηs, R, c, e1)
+"""
+    _integral_error_correction_stieltjes(
+        f,
+        H::AbstractArray,
+        Hs,
+        ηs::AbstractVector,
+        order::Int,
+        e1
+    )
+
+TBW
+"""
+function _integral_error_correction_stieltjes(
+        f,
+        H::AbstractArray,
+        Hs,
+        ηs::AbstractVector,
+        x,
+        w,
+        e1
+    )
 
     m = size(H, 1)
 
+    S = zeros(ComplexF64, m)
+
+    for (t, ω) in zip(x, w)
+        y = (t * I - H) \ e1
+
+        ϕ = prod(
+            ηs[j] * ((t * I - Hs[j]) \ e1)[end] for j in eachindex(ηs)
+        )
+
+        S += f.constant * ω * f.inner(t) * ϕ * y
+    end
+    return S
+
+end
+
+"""
+    krylov_approx_quad(
+        f::StieltjesFunction,
+        A::AbstractArray,
+        b::AbstractVector,
+        m::Int
+        ;
+        tol = 1.0e-12,
+        max_restarts = 200,
+        contour_safety = nothing,
+        order = 8,
+        maxorder = 20000,
+        trace::Union{Nothing, Trace} = nothing,
+        contour::Union{Nothing, AbstractContour} = nothing,
+        exact::Union{Nothing, AbstractVector} = nothing
+    )
+
+Approximate `f(A)b` using an integral representation for the error where f is a Stieltjes. In this case we can approximate the error using an integral that is independent of the spectrum of `A`.
+"""
+function krylov_approx_quad(
+        f::StieltjesFunction,
+        A::AbstractArray,
+        b::AbstractVector,
+        m::Int
+        ;
+        quad_tol = 1.0e-12,
+        stop_tol = 1.0e-16,
+        max_restarts = 200,
+        order = 8,
+        maxorder = 20000,
+        trace::Union{Nothing, Trace} = nothing,
+        contour_override::Union{Nothing, AbstractContour} = nothing,
+        exact::Union{Nothing, AbstractVector} = nothing
+    )
+
+    if !isnothing(contour_override)
+        @warn "Stieltjes functions always use a spectrum independent contour. Provided Contour will be ignored."
+    end
+
+    real_res = (eltype(A) <: AbstractFloat) && (eltype(b) <: AbstractFloat)
+
+    _check_sizes(exact, A, b)
+
+    set_type!(trace, Quadrature1Stieltjes)
+    log_value!(trace, :restart_length, m)
+
+    β, qm, is_A_hermitian,
+        Q, H, Hs, η, ηs, e1,
+        quad1, quad2, h2, fk = _initialize_krylov_approx_quad(f, A, b, m, order)
+
+    _check_exact_err(exact, fk, trace)
+
+    contour = StieltjesContour()
+
+    update_norm_prev = Inf
+
+    for k in 2:max_restarts
+
+        set_restart!(trace, k)
+        (Q, H, η, qm) = is_A_hermitian ? lanczos(A, qm, m) : arnoldi(A, qm, m)
+
+        accurate = false
+        refined = false
+
+        while !accurate
+
+            if !isnothing(_check_quad_order_divergence(quad1, quad2, maxorder, trace))
+                isnothing(trace) && throw(ErrorException(lazy"quadrature order exceeded allowence"))
+                set_stop!(trace, QuadOrderDivergence)
+                return real_res ? fk .|> real : fk
+            end
+
+            log_metric!(trace, :quad1_order, quad1)
+            log_metric!(trace, :quad2_order, quad2)
+
+            x1, w1 = resolve(contour, quad1)
+            x2, w2 = resolve(contour, quad2)
+
+            h1 = _integral_error_correction_stieltjes(f, H, Hs, ηs, x1, w1, e1)
+            h2 = _integral_error_correction_stieltjes(f, H, Hs, ηs, x2, w2, e1)
+
+            err = norm(h2 - h1)
+
+            log_metric!(trace, :quad_err, err)
+
+            if !isnothing(_NaNcheck(err))
+                isnothing(trace) && throw(OverflowError(lazy"quadrature error diverged to NaN"))
+                set_stop!(trace, QuadErrorDivergence)
+                return real_res ? fk .|> real : fk
+            end
+
+            quad1, quad2, accurate, refined = _check_quad_err(err, quad_tol, quad1, quad2, accurate, refined)
+        end
+
+        update = β * Q * h2
+
+        update_norm = norm(update)
+
+        log_metric!(trace, :update_norm, update_norm)
+        if (10 * update_norm_prev) < update_norm
+            set_stop!(trace, UpdateNormDivergence)
+            return real_res ? fk .|> real : fk
+        end
+
+        update_norm_prev = update_norm
+
+        fk += update
+
+        _check_exact_err(exact, fk, trace)
+
+        if update_norm < stop_tol
+            set_stop!(trace, UpdateAcc)
+            return real_res ? fk .|> real : fk
+        end
+
+        push!(Hs, H)
+        push!(ηs, η)
+
+        quad1, quad2 = _refine_quad_order(refined, quad1, quad2)
+    end
+    set_stop!(trace, MaxRestarts)
+    return real_res ? fk .|> real : fk
+end
+
+"""
+    _make_integral_function(f, H, Hs, ηs, R, c, e1)
+
+    Generate a function `F` to be integrated.
+"""
+function _make_integral_function(f, H, Hs, ηs, cov::ComplexQuadrature.ChangeOfVariables, e1)
     function F(x, p = nothing)
 
-        # Coordinate transform from [-1,1] to circle contour
-        θ = π * x
-        expθ = cis(θ)
-        t = c + R * expθ
+        t = cov.zmap(x)
+
+        w = cov.dzmap(x)
 
         y = (t * I - H) \ e1
 
         ϕ = one(eltype(H))
 
-        res = Vector{ComplexF64}(undef, m)
-
         for j in eachindex(ηs)
-            ldiv!(res, (t * I - Hs[j]), e1)
+            res = (t * I - Hs[j]) \ e1
             ϕ *= ηs[j] * res[end]
         end
 
-        return (0.5 * R * expθ * f(t) * ϕ) * y
+        return ((1 / (2π * 1im)) * w * f(t) * ϕ) * y
     end
 
     return F
+
 end
 
 """
@@ -509,15 +774,19 @@ function krylov_approx_quad2(
         b::AbstractVector,
         m::Int
         ;
-        tol = 1.0e-16,
+        quad_tol = 1.0e-12,
+        stop_tol = 1.0e-16,
         max_restarts = 200,
         contour_safety = 1.1,
+        rebuild_contour = true,
         alg = QuadGKJL(),
-        trace::Union{Nothing, Trace},
-        exact::Union{Nothing, AbstractVector}
+        contour_type::Type{<:AbstractContour} = CircleContour,
+        trace::Union{Nothing, Trace} = nothing,
+        contour_override::Union{Nothing, AbstractContour} = nothing,
+        exact::Union{Nothing, AbstractVector} = nothing,
     )
 
-    real_res = false
+    real_res = (eltype(A) <: AbstractFloat) && (eltype(b) <: AbstractFloat)
 
     _check_sizes(exact, A, b)
 
@@ -538,8 +807,147 @@ function krylov_approx_quad2(
     Hs = [H]
     ηs::Vector{eltype(H)} = [η]
 
-    h = f(H)[1, :]
+    h = f(H)[:, 1]
+
     fk = β * Q * h
+
+    _check_exact_err(exact, fk, trace)
+
+    e1 = unit_vector(eltype(H), m, 1)
+
+    contour::AbstractContour = isnothing(contour_override) ? begin
+            ritz = first(eigen(H))
+            build(contour_type, ritz, contour_safety)
+        end : contour_override
+
+    for k in 2:max_restarts
+
+        set_restart!(trace, k)
+
+        (Q, H, η, qm) = is_A_hermitian ? lanczos(A, qm, m) : arnoldi(A, qm, m)
+
+        if isnothing(contour_override) && rebuild_contour
+            append!(ritz, first(eigen(H)))
+            contour = build(contour_type, ritz, contour_safety)
+        end
+
+        update = contour isa PacmanContour ? begin
+                S = zeros(eltype(H), size(H, 1))
+                for cov in contour.covs
+                    F = _make_integral_function(f, H, Hs, ηs, cov, e1)
+                    prob = IntegralProblem(F, (-1, 1))
+                    sol = solve(prob, alg, reltol = quad_tol, abstol = quad_tol)
+                    S += sol.u
+            end
+                β * Q * S
+            end : begin
+                F = _make_integral_function(f, H, Hs, ηs, contour.cov, e1)
+                prob = IntegralProblem(F, (-1, 1))
+                sol = solve(prob, alg, reltol = quad_tol, abstol = quad_tol)
+                β * Q * sol.u
+            end
+
+        update_norm = update |> norm
+
+        log_metric!(trace, :update_norm, update_norm)
+
+        fk += update
+
+        _check_exact_err(exact, fk, trace)
+
+        if update_norm < stop_tol
+            set_stop!(trace, UpdateAcc)
+            return real_res ? fk .|> real : fk
+        end
+
+        push!(Hs, H)
+        push!(ηs, η)
+    end
+
+    set_stop!(trace, MaxRestarts)
+    return real_res ? fk .|> real : fk
+end
+
+"""
+    _make_integral_function_stieltjes(f, H, Hs, ηs, e1)
+
+    Generate a function `F` to be integrated when
+    the matrix function to be approximanted is a Stieltjes function.
+
+"""
+function _make_integral_function_stieltjes(f, H, Hs, ηs, e1)
+
+    function F(x, p = nothing)
+
+        y = (x * I - H) \ e1
+
+        ϕ = one(eltype(H))
+
+        for j in eachindex(ηs)
+            res = (x * I - Hs[j]) \ e1
+            ϕ *= ηs[j] * res[end]
+        end
+
+        return f.constant * (f.inner(x) * ϕ) * y
+    end
+
+    return F
+end
+
+
+"""
+    krylov_approx_quad2(
+        f::StieltjesFunction,
+        A::AbstractArray,
+        b::AbstractVector,
+        m::Int
+        ;
+        tol = 1.0e-16,
+        max_restarts = 200,
+        contour_safety = 2.0,
+        alg = QuadGKJL(),
+        trace::Union{Nothing, Trace} = nothing,
+        exact::Union{Nothing, AbstractVector} = nothing
+    )
+
+Approximate ``f(A)b`` using an integral formulation for the error evaluated by Gauss-Kronrad quadrature. When `f` is a Stieltjes function we can evaluate the integral on the interval [-∞,0] independent of the spectrum of `A`.
+`A` must have no negative eigenvalues!
+"""
+function krylov_approx_quad2(
+        f::StieltjesFunction,
+        A::AbstractArray,
+        b::AbstractVector,
+        m::Int
+        ;
+        quad_tol = 1.0e-16,
+        stop_tol = 1.0e-16,
+        max_restarts = 200,
+        alg = QuadGKJL(),
+        trace::Union{Nothing, Trace} = nothing,
+        exact::Union{Nothing, AbstractVector} = nothing
+    )
+
+    _check_sizes(exact, A, b)
+
+    real_res = (eltype(A) <: AbstractFloat) && (eltype(b) <: AbstractFloat)
+
+    set_type!(trace, QuadratureSolverSieltjes)
+
+    β = norm(b)
+
+    qm = (1 / β) * b
+
+    is_A_hermitian = ishermitian(A)
+
+    (Q, H, η, qm) = is_A_hermitian ? lanczos(A, qm, m) : arnoldi(A, qm, m)
+
+    Hs = [H]
+    ηs::Vector{eltype(H)} = [η]
+
+    h = f(H)[:, 1]
+    fk = β * Q * h
+
+    _check_exact_err(exact, fk, trace)
 
     e1 = unit_vector(eltype(H), m, 1)
 
@@ -549,10 +957,9 @@ function krylov_approx_quad2(
 
         (Q, H, η, qm) = is_A_hermitian ? lanczos(A, qm, m) : arnoldi(A, qm, m)
 
-        R, c = fetch_contour_circle(H, contour_safety)
-        F = _make_integral_function(f, H, Hs, ηs, R, c, e1)
-        prob = IntegralProblem(F, (-1.0, 1.0))
-        sol = solve(prob, alg, reltol = 1.0e-16, abstol = 1.0e-16)
+        F = _make_integral_function_stieltjes(f, H, Hs, ηs, e1)
+        prob = IntegralProblem(F, (-Inf, 0.0))
+        sol = solve(prob, alg, reltol = quad_tol, abstol = quad_tol)
 
         update = β * Q * sol.u
 
@@ -561,26 +968,22 @@ function krylov_approx_quad2(
         log_metric!(trace, :update_norm, update_norm)
 
         fk += update
-        if update_norm < tol
-            if real_res
-                fk = fk .|> real
-            end
-
+        _check_exact_err(exact, fk, trace)
+        if update_norm < stop_tol
             set_stop!(trace, UpdateAcc)
-            return fk
+            return real_res ? fk .|> real : fk
         end
 
         push!(Hs, H)
         push!(ηs, η)
     end
-    if real_res
-        fk = fk .|> real
-    end
     set_stop!(trace, MaxRestarts)
-    return fk
+    return real_res ? fk .|> real : fk
 end
 
 """
+    krylov_approx_2norm(r::RationalApproximation, A, b, m)
+
 Implementation of ``f(A)b`` for HPD matrices with an error indicator given
 from "2-Norm Error bounds and estimates for Lanczos approximations to
 linear systems and rational matrix functions".
@@ -595,6 +998,8 @@ function krylov_approx_2norm(r::RationalApproximation, A, b, m)
 end
 
 """
+    norm_of_hwz(z, w::Real, a, b)
+
 Chen dissertation: Lemma 7.8
 """
 function norm_of_hwz(z, w::Real, a, b)
@@ -614,14 +1019,14 @@ function norm_of_hwz(z, w::Real, a, b)
     return max(left, middle, right)
 end
 
-function build_contour_chen(f, T, contour_safety, order, w)
-    λs, _ = eigen(T)
+"""
+    chen_values(f, contour, order, w, λmax, λmin)
 
-    λmax = maximum(λs)
-    λmin = minimum(λs)
+TBW
+"""
+function chen_values(f, contour, order, w, λmax, λmin)
 
-    R, c = fetch_contour_circle(λs, contour_safety)
-    nodes, weights = contour_quad_nodes(order, R, c)
+    nodes, weights = resolve(contour, order)
 
     fval = nodes .|> f
     absfval = fval .|> abs
@@ -629,9 +1034,7 @@ function build_contour_chen(f, T, contour_safety, order, w)
     norm_curry = z -> norm_of_hwz(z, w, λmin, λmax)
     norm_val = nodes .|> norm_curry
 
-    integral_constant = (R * im) / (2 * π)
-
-    return R, c, nodes, weights, fval, absfval, norm_val, integral_constant
+    return nodes, weights, fval, absfval, norm_val
 end
 
 """
@@ -655,12 +1058,13 @@ We also will need to choose a contour for evaluating an integral such that every
 the contour is far away from the spectrum of `A` and ritz-values of each `T`.
 """
 function krylov_approx_chen_implicit(
-        f, A, b, m, w;
+        f, A, b, m, w::AbstractFloat = 0.0;
         tol = 1.0e-16,
         max_restarts = 200,
         contour_safety = 2.0,
         order = 80,
-        trace::Union{Nothing, Trace},
+        trace::Union{Nothing, Trace} = nothing,
+        contour::Union{Nothing, AbstractContour} = nothing,
         exact::Union{Nothing, AbstractVector} = nothing
     )
 
@@ -673,24 +1077,32 @@ function krylov_approx_chen_implicit(
 
     set_type!(trace, ChenImplicit)
 
-    log_value!(tr, :restart_length, m)
-    log_value!(tr, :w_value, w)
+    log_value!(trace, :restart_length, m)
+    log_value!(trace, :w_value, w)
 
     β = norm(b)
     qm = (1 / β) * b
 
     (Q, T, η, qm) = lanczos(A, qm, m)
 
-    T = SymTridiagonal(T)
+
+    λs, _ = eigen(T)
+    λmax = λs |> maximum
+    λmin = λs |> minimum
+
 
     #The contour is set once based on the initial Ritz values
-    R, c, nodes, weights, fval, absfval, norm_val, error_integral_constant = build_contour_chen(f, T, contour_safety, order, w)
-    update_integral_constant = (R / (2 * π * im))
+    if isnothing(contour)
+        r = λmin / contour_safety
+        R = λmax * contour_safety
+        contour = PacmanContour(r, R, r, float(π), complex(w))
+    end
 
-    log_value!(tr, :contour_radius, R)
-    log_value!(tr, :contour_center, c)
+    nodes, weights, fval, absfval, norm_val = chen_values(f, contour, order, w, λmax, λmin)
 
-    h = f(T)[1, :]
+    integral_constant = (1 / (2 * π * im))
+
+    h = f(T)[:, 1]
     fk = β * Q * h
 
     # Dets are computed in log-space for numerical stability
@@ -774,24 +1186,26 @@ function krylov_approx_chen_implicit(
             sgn = -sgn
         end
 
-        h = (update_integral_constant * (sum(cauchy_integral, dims = 2) + sum(recurrence_terms, dims = 2))) .|> real
+        h = (integral_constant * (sum(cauchy_integral, dims = 2) + sum(recurrence_terms, dims = 2))) .|> real
         fk .+= h
 
         push!(ηs, η)
 
         det_prod = exp.(-dets_accum .+ w_det_accum)
-        error_indicator = error_integral_constant * dot(weights, absfval .* det_prod .* norm_val)
+        error_indicator = integral_constant * dot(weights, absfval .* det_prod .* norm_val)
 
         log_metric!(trace, :error_indicator, error_indicator)
 
-        isnan(error_indicator) && throw(OverflowError(lazy"Error bound is NaN, choose a different value for `w`"))
-
+        if !isnothing(_NaNcheck(error_indicator))
+            isnothing(trace) && throw(OverflowError(lazy"quadrature error diverged to NaN"))
+            set_stop!(trace, QuadErrorDivergence)
+            return fk
+        end
 
         if !(exact === nothing || isempty(exact))
             abs_err = norm(exact - fk)
             log_metric!(trace, :abs_err, abs_err)
         end
-
 
         error_indicator_norm = error_indicator |> norm
 
@@ -806,6 +1220,78 @@ function krylov_approx_chen_implicit(
     return fk
 end
 
+function krylov_approx_chen_implicit_2(
+        f, A, b, m, w;
+        tol = 1.0e-16,
+        max_restarts = 200,
+        contour_safety = 2.0,
+        order = 80,
+        trace::Union{Nothing, Trace} = nothing,
+        exact::Union{Nothing, AbstractVector} = nothing
+    )
+
+    @assert ishermitian(A)
+    n = size(A, 1)
+
+    _check_sizes(exact, A, b)
+
+    err = 0.0
+
+    set_type!(trace, ChenImplicit)
+
+    log_value!(trace, :restart_length, m)
+    log_value!(trace, :w_value, w)
+
+    β = norm(b)
+    qm = (1 / β) * b
+
+    (Q, T, η, qm) = lanczos(A, qm, m)
+
+    T = SymTridiagonal(T)
+
+    #The contour is set once based on the initial Ritz values
+    #R, c, nodes, weights, fval, absfval, norm_val, error_integral_constant = build_contour_chen(f, T, contour_safety, order, w)
+
+    R, c = fetch_circle(T, contour_safety)
+    nodes, weights = circle_contour(order, R, c)
+
+    fval = f.(nodes)
+
+    update_integral_constant = (1 / (2 * π))
+
+
+    # rv = mapreduce(node -> (T - node * I) \ em, hcat, nodes)
+    # lv = mapreduce(node -> (T - node * I) \ e1, hcat, nodes)
+
+    Qhb = Q' * b
+
+    cauchy_sol = Array{ComplexF64}(undef, order, n)
+
+    for (j, node) in enumerate(nodes)
+        cauchy_sol[j, :] = Q * ((T - node * I) \ Qhb)
+    end
+
+    @info size(weights)
+    @info size(fval)
+    @info size(cauchy_sol)
+
+    fk = sum(weights[j] * fval[j] * cauchy_sol[j, :] for j in eachindex(weights))
+    fk *= update_integral_constant
+    return fk
+end
+
+"""
+Does it even work?
+"""
+function quad_test(f, a, R, order = 80)
+    contour = CircleContour(R, a)
+    x, w = resolve(contour, order)
+
+    s = f.(x) ./ (x .- a)
+
+    return (1 / (2 * π * im)) * sum(w .* s)
+end
+
 """
 Implementation of an explicit restarted KSM using an error indicator adapted from Chen et al.
 
@@ -814,21 +1300,22 @@ For this algorithm we require that `A` be Hermitian as the error bound is only v
 The adaptation for the restarted scheme was derived assuming that we have a decomposition as given by Eiermann and Ernst (2006).
 """
 function krylov_approx_chen_explicit(
-        f, A, b, m, w;
+        f, A, b, m, w::AbstractFloat = 0.0;
         tol = 1.0e-16,
         max_restarts = 200,
         contour_safety = 2.0,
-        order = 20,
+        order = 200,
         rebuild_contour = true,
-        trace::Union{Trace, Nothing} = nothing,
-        exact = Union{AbstractVector, Nothing} = nothing
+        trace::Union{Nothing, Trace} = nothing,
+        contour::Union{Nothing, AbstractContour} = nothing,
+        exact::Union{Nothing, AbstractVector} = nothing
     )
 
     @assert ishermitian(A)
 
     _check_sizes(exact, A, b)
 
-    set_type!(trace, ChenExplict)
+    set_type!(trace, ChenExplicit)
 
     β = norm(b)
     qm = (1 / β) * b
@@ -837,10 +1324,22 @@ function krylov_approx_chen_explicit(
 
     That = T
 
-    R, c, nodes, weights, fval, absfval, norm_val, error_integral_constant = build_contour_chen(f, T, contour_safety, order, w)
+    λs, _ = eigen(T)
 
-    log_metric!(trace, :nodes, nodes)
-    log_metric!(trace, :radius_center, (R, c))
+    λmax = λs |> maximum
+    λmin = λs |> minimum
+
+    if isnothing(contour)
+        r = λmin / contour_safety
+        R = λmax * contour_safety
+        contour = PacmanContour(r, R, r, float(π), complex(w))
+        log_metric!(trace, :radii, (r, R))
+    end
+
+    nodes, weights, fval, absfval, norm_val = chen_values(f, contour, order, w, λmax, λmin)
+
+    integral_constant = (1 / (2 * π * im))
+
     log_metric!(trace, :norm_val, norm_val)
     log_metric!(trace, :absfval, absfval)
 
@@ -858,28 +1357,44 @@ function krylov_approx_chen_explicit(
 
         @views h = f(That)[((k - 1) * m + 1):((k - 1) * m + m), 1]
 
+        log_metric!(trace, :update_norm, norm(h))
+
         fk .+= β * (Q * h)
 
-        if rebuild_contour
-            R, c, nodes, weights, fval, absfval, norm_val, error_integral_constant = build_contour_chen(f, That, contour_safety, order, w)
-            log_metric!(trace, :nodes, nodes)
-            log_metric!(trace, :radius_center, (R, c))
+        if rebuild_contour && (contour isa PacmanContour)
+            λs, _ = eigen(T)
+            cur_λmax = λs |> maximum
+            λmax = cur_λmax > λmax ? cur_λmax : λmax
+            cur_λmin = λs |> minimum
+            λmin = cur_λmin < λmin ? cur_λmin : λmin
+
+            r = λmin / contour_safety
+            R = λmax * contour_safety
+            contour = PacmanContour(r, R, r, float(π), complex(w))
+
+            nodes, weights, fval, absfval, norm_val = chen_values(f, contour, order, w, λmax, λmin)
+            log_metric!(trace, :radii, (r, R))
             log_metric!(trace, :norm_val, norm_val)
             log_metric!(trace, :absfval, absfval)
         end
 
-        norm_hwz_T = Array{Float64}(undef, order)
-        det_w = first(logabsdet(That - w * I))
+        norm_hwz_T = Array{ComplexF64}(undef, order)
+        det_w = det(That - w * I)
         for (i, node) in enumerate(nodes)
-            norm_hwz_T[i] = det_w - first(logabsdet(That - node * I))
+            norm_hwz_T[i] = det_w / det(That - node * I)
         end
+
         log_metric!(trace, :norm_hwz_T, norm_hwz_T)
 
-        error_indicator = (error_integral_constant * dot(weights, absfval .* exp.(norm_hwz_T) .* norm_val))
+        error_indicator = (integral_constant * dot(weights, absfval .* norm_hwz_T .* norm_val))
 
         log_metric!(trace, :error_indicator, error_indicator)
 
-        isnan(error_indicator) && throw(OverflowError(lazy"Error bound is NaN, choose a different value for `w`"))
+        if !isnothing(_NaNcheck(error_indicator))
+            isnothing(trace) && throw(OverflowError(lazy"quadrature error diverged to NaN"))
+            set_stop!(trace, QuadErrorDivergence)
+            return fk
+        end
 
         error_indicator_norm = error_indicator |> real |> abs
 

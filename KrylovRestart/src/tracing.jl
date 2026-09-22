@@ -3,13 +3,15 @@
     KrylovApproxFunction
     KrylovApproxRational
     Quadrature1
+    Quadrature1Stieltjes
     QuadratureSolver
+    QuadratureSolverSieltjes
     ChenImplicit
     ChenExplicit
 end
 
 mutable struct Trace
-    type::General
+    type::TraceType
     restarts::Int
     stop::Union{Nothing, StopCode}
     values::Dict{Symbol, Any} #Use this to record single values that do not change between restarts
