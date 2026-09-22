@@ -1,3 +1,8 @@
 **/.DS_Store
 **/Manifest.toml
 *.cov
+traces
+plots
+invsqrt_testing.jl
+inv_sqrt_script.jl
+more_inv_sqrt_testing.jl
