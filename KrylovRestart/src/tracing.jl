@@ -6,6 +6,7 @@
     Quadrature1Stieltjes
     QuadratureSolver
     QuadratureSolverSieltjes
+    FrommerStieltjes
     ChenImplicit
     ChenExplicit
 end

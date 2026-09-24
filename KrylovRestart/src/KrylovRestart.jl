@@ -24,6 +24,7 @@ export StieltjesFunction, inverse_pth_root
 export arnoldi, lanczos
 export StopCode, Trace, TraceType, krylov_approx
 export krylov_approx_quad, krylov_approx_quad2, message
+export krylov_approx_stieltjes
 export krylov_approx_chen_explicit, krylov_approx_chen_implicit,
     krylov_approx_chen_implicit_2, quad_test
 export log_metric!, log_value!, reset!

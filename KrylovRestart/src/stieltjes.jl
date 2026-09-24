@@ -5,7 +5,7 @@ The function `outer` is the standard representation of the function being repres
 
 example: f(z) = z^(-1/2)
     outer = (sqrt ∘ inv)
-    inner = (sqrt ∘ inv ∘ -) # equialently: (t) -> inv(sqrt(-t))
+    inner = (sqrt ∘ inv ∘ -) # equivalently: (t) -> inv(sqrt(-t))
     constant = sin((1/2 - 1)*π)/π
 """
 struct StieltjesFunction

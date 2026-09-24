@@ -637,6 +637,7 @@ function krylov_approx_quad(
         max_restarts = 200,
         order = 8,
         maxorder = 20000,
+        contour_type::Type{<:AbstractStieltjesContour} = StieltjesContour,
         trace::Union{Nothing, Trace} = nothing,
         contour_override::Union{Nothing, AbstractContour} = nothing,
         exact::Union{Nothing, AbstractVector} = nothing
@@ -659,7 +660,7 @@ function krylov_approx_quad(
 
     _check_exact_err(exact, fk, trace)
 
-    contour = StieltjesContour()
+    contour = build(contour_type)
 
     update_norm_prev = Inf
 
@@ -981,20 +982,269 @@ function krylov_approx_quad2(
     return real_res ? fk .|> real : fk
 end
 
+function _lanczos_stieltjes_action(nodes, weights, ρ, T, normb)
+
+    e1 = unit_vector(eltype(T), size(T, 1), 1)
+
+    S = zeros(eltype(T), size(T, 1))
+    for (i, t) in pairs(IndexLinear(), nodes)
+        shift_sol = (T - t * I) \ e1
+        S .+= weights[i] * ρ[i] * shift_sol
+    end
+
+    return S
+
+end
+
+function _lanczos_stieltjes_recurrence!(d, ρ, T, η, nodes)
+    fill!(d, one(eltype(d)))
+    m = size(T, 1)
+
+    for r in 1:m
+        α = T.dv[r]
+        βprev = (r == 1) ? zero(η) : T.ev[r - 1]
+        βout = (r == m) ? η : T.ev[r]
+
+        @. d = α - nodes - βprev^2 / d
+        @. ρ = ρ * βout / d
+    end
+    return d, ρ
+end
+
+function _radau_extension(T::SymTridiagonal, η, λ, em)
+    shift_sol = SymTridiagonal(T.dv .- λ, T.ev) \ em
+    δ = η^2 * shift_sol[end]
+
+    return SymTridiagonal(
+        vcat(T.dv, δ),
+        vcat(T.ev, η),
+    )
+end
+
+function _lanczos_stieltjes_restart(
+        f::StieltjesFunction,
+        A::AbstractArray,
+        b::AbstractVector,
+        m::Int,
+        nodes,
+        weights,
+        tol,
+        max_restarts::Int,
+        safety_factor,
+        trace::Union{Nothing, Trace} = nothing,
+        exact::Union{Nothing, AbstractVector} = nothing
+    )
+
+    real_res = (eltype(A) <: AbstractFloat) && (eltype(b) <: AbstractFloat)
+
+    normb = norm(b)
+
+    qm = b / normb
+
+    (Q, T, η, qm) = lanczos(A, qm, m)
+
+    fk = normb * Q * f(T)[:, 1]
+
+    _check_exact_err(exact, fk, trace)
+
+    if iszero(η)
+        set_stop!(trace, LanczosBreakdown)
+        return fk
+    end
+
+    em = unit_vector(eltype(A), m, m)
+
+    d = ones(eltype(weights), size(nodes))
+    ρ = ones(eltype(weights), size(nodes))
+    _lanczos_stieltjes_recurrence!(d, ρ, T, η, nodes)
+
+    min_ritz = eigmin(T)
+
+    for k in 2:max_restarts
+
+        update_sign = isodd(m) && iseven(k) ? -1 : 1
+
+        set_restart!(trace, k)
+
+        (Q, T, η, qm) = lanczos(A, qm, m)
+
+        gauss_update = _lanczos_stieltjes_action(nodes, weights, ρ, T, normb)
+
+        low_bnd = normb * norm(gauss_update)
+
+        update = (normb * update_sign) * (Q * gauss_update)
+        update_norm = update |> norm
+
+        log_metric!(trace, :update_norm, update_norm)
+
+        # In case of breakdown we apply the current update
+        if iszero(η)
+            set_stop!(trace, LanczosBreakdown)
+            fk .+= update
+            _check_exact_err(exact, fk, trace)
+            return real_res ? fk .|> real : fk
+        end
+
+        θ = eigmin(T)
+        min_ritz = min(min_ritz, θ)
+        λ = safety_factor * min_ritz
+
+        Tbar = _radau_extension(T, η, λ, em)
+
+        radau_update = _lanczos_stieltjes_action(nodes, weights, ρ, Tbar, normb)
+        up_bnd = normb * norm(radau_update)
+
+        log_metric!(trace, :low_bnd, low_bnd)
+        log_metric!(trace, :up_bnd, up_bnd)
+
+        if up_bnd < tol
+            set_stop!(trace, UpBndAcc)
+            return real_res ? fk .|> real : fk
+        end
+
+        fk .+= update
+        _check_exact_err(exact, fk, trace)
+
+        if update_norm < tol
+            set_stop!(trace, UpdateAcc)
+            return real_res ? fk .|> real : fk
+        end
+        _lanczos_stieltjes_recurrence!(d, ρ, T, η, nodes)
+    end
+    set_stop!(trace, MaxRestarts)
+    return real_res ? fk .|> real : fk
+end
+
+function _arnoldi_stieltjes_action(ρ, H, η, nodes, weights, e1)
+
+    h = zeros(eltype(H), size(H, 1))
+    ρ_next = zeros(eltype(H), size(ρ))
+
+    for (i, t) in pairs(IndexLinear(), nodes)
+        shift_sol = (H - t * I) \ e1
+
+        @. h += weights[i] * ρ[i] * shift_sol
+
+        ρ_next[i] = -η * ρ[i] * shift_sol[end]
+    end
+    return h, ρ_next
+end
+
+function _arnoldi_stieltjes_restart(
+        f::StieltjesFunction,
+        A::AbstractArray,
+        b::AbstractVector,
+        m::Int,
+        nodes,
+        weights,
+        tol,
+        max_restarts::Int,
+        safety_factor,
+        trace::Union{Nothing, Trace} = nothing,
+        exact::Union{Nothing, AbstractVector} = nothing
+    )
+
+    real_res = (eltype(A) <: AbstractFloat) && (eltype(b) <: AbstractFloat)
+
+    normb = norm(b)
+
+    qm = b / normb
+
+    (Q, H, η, qm) = arnoldi(A, qm, m)
+
+    fk = normb * Q * f(H)[:, 1]
+
+    _check_exact_err(exact, fk, trace)
+
+    if iszero(η)
+        set_stop!(trace, ArnoldiBreakdown)
+        return fk
+    end
+
+    e1 = unit_vector(eltype(A), m, 1)
+
+    ρ = ones(eltype(weights), size(nodes))
+    _, ρ = _arnoldi_stieltjes_action(ρ, H, η, nodes, weights, e1)
+
+    for k in 2:max_restarts
+
+        set_restart!(trace, k)
+
+        (Q, H, η, qm) = arnoldi(A, qm, m)
+
+
+        h, ρ_next = _arnoldi_stieltjes_action(ρ, H, η, nodes, weights, e1)
+
+        error_indicator = normb * norm(h)
+
+        update = normb * Q * h
+        update_norm = update |> norm
+
+        log_metric!(trace, :update_norm, update_norm)
+        log_metric!(trace, :error_indicator, error_indicator)
+
+        # In case of breakdown we apply the current update
+        if iszero(η)
+            set_stop!(trace, ArnoldiBreakdown)
+            fk .+= update
+            _check_exact_err(exact, fk, trace)
+            return real_res ? fk .|> real : fk
+        end
+
+        if error_indicator < (safety_factor * tol)
+            set_stop!(trace, IndicatorAcc)
+            return real_res ? fk .|> real : fk
+        end
+
+        fk .+= update
+        _check_exact_err(exact, fk, trace)
+
+        if update_norm < tol
+            set_stop!(trace, UpdateAcc)
+            return real_res ? fk .|> real : fk
+        end
+
+        ρ = ρ_next
+
+    end
+    set_stop!(trace, MaxRestarts)
+    return fk
+end
+
 """
-    krylov_approx_2norm(r::RationalApproximation, A, b, m)
-
-Implementation of ``f(A)b`` for HPD matrices with an error indicator given
-from "2-Norm Error bounds and estimates for Lanczos approximations to
-linear systems and rational matrix functions".
-
-For this algorithm we need `f` to be a rational function
-(or able to be accurately approximated by a rational function)
-and furthermore `A` to be HPD.
-
+    Calculate `f(A)b` by the algorithm described by Frommer and Schweitzer for a Stieltjes function `f` and a positive definite matrix `A`.
 """
-function krylov_approx_2norm(r::RationalApproximation, A, b, m)
+function krylov_approx_stieltjes(
+        f::StieltjesFunction,
+        A::AbstractArray,
+        b::AbstractVector,
+        m::Int,
+        ;
+        order = 40,
+        tol = 1.0e-16,
+        max_restarts = 200,
+        safety_factor = 0.99,
+        contour_type::Type{<:AbstractStieltjesContour} = SquaredStieltjesContour,
+        trace::Union{Nothing, Trace} = nothing,
+        exact::Union{Nothing, AbstractVector} = nothing
+    )
 
+    set_type!(trace, FrommerStieltjes)
+
+    _check_sizes(exact, A, b)
+
+    contour = build(contour_type)
+    nodes, ω = resolve(contour, order)
+    weights = (-f.constant) .* ω .* f.inner.(nodes)
+
+    A_is_hermitian = ishermitian(A)
+
+    if A_is_hermitian
+        fk = _lanczos_stieltjes_restart(f, A, b, m, nodes, weights, tol, max_restarts, safety_factor, trace, exact)
+    else
+        fk = _arnoldi_stieltjes_restart(f, A, b, m, nodes, weights, tol, max_restarts, safety_factor, trace, exact)
+    end
+    return fk
 end
 
 """
@@ -1281,18 +1531,6 @@ function krylov_approx_chen_implicit_2(
 end
 
 """
-Does it even work?
-"""
-function quad_test(f, a, R, order = 80)
-    contour = CircleContour(R, a)
-    x, w = resolve(contour, order)
-
-    s = f.(x) ./ (x .- a)
-
-    return (1 / (2 * π * im)) * sum(w .* s)
-end
-
-"""
 Implementation of an explicit restarted KSM using an error indicator adapted from Chen et al.
 
 Here we contruct the extended block diagonal matrix `That` like in `krylov_approx`. We evaluate the error using quadrature. Because we have access to the full matrix `That` we are able to rebuild our contour every restart based on the current Ritz values of `That`. This allows us to use a lower `order`.
@@ -1410,4 +1648,16 @@ function krylov_approx_chen_explicit(
     end
     set_stop!(trace, MaxRestarts)
     return fk
+end
+
+"""
+Does it even work?
+"""
+function quad_test(f, a, R, order = 80)
+    contour = CircleContour(R, a)
+    x, w = resolve(contour, order)
+
+    s = f.(x) ./ (x .- a)
+
+    return (1 / (2 * π * im)) * sum(w .* s)
 end

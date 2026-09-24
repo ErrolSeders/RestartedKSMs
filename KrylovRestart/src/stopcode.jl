@@ -9,6 +9,8 @@
     QuadErrorDivergence #7
     QuadOrderDivergence #8
     UpdateNormDivergence #9
+    LanczosBreakdown #10
+    ArnoldiBreakdown #11
 end
 
 message(::Val{MaxRestarts}) = "Maximum number of restarts reached."
@@ -21,5 +23,7 @@ message(::Val{IndicatorAcc}) = "Error Indicator below stopping accuracy"
 message(::Val{QuadErrorDivergence}) = "Quadrature error diverged. Accuracy is likely poor!"
 message(::Val{QuadOrderDivergence}) = "Quadrature order has exceeded maximum allowence. Accuracy is likely poor!"
 message(::Val{UpdateNormDivergence}) = "Update norm greater than previous update"
+message(::Val{LanczosBreakdown}) = "Residual is zero. Fortuitous Lanczos breakdown, returning early"
+message(::Val{ArnoldiBreakdown}) = "Residual is zero. Arnoldi has suffered breakdown, returning early"
 message(::Val{M}) where {M} = "Invalid stop code encountered! This should never happen!"
 message(c::StopCode) = message(Val(c))

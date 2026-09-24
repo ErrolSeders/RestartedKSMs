@@ -215,10 +215,13 @@ function build(::Type{EllipseContour}, λs, contour_buffer)
         a, b, c
     )
 end
+
+abstract type AbstractStieltjesContour <: AbstractContour end
+
 """
 Contour for use when integrating Stieljes functions. Always [-∞,0].
 """
-struct StieltjesContour{T <: Real} <: AbstractContour
+struct StieltjesContour{T <: Real} <: AbstractStieltjesContour
     cov::ChangeOfVariables
     StieltjesContour{T}() where {T <: Real} = new{T}(
         ChangeOfVariables(
@@ -233,6 +236,33 @@ StieltjesContour() = StieltjesContour{Float64}()
 build(::Type{StieltjesContour}) = StieltjesContour()
 
 build(::Type{StieltjesContour}, λs, contour_buffer) = StieltjesContour()
+
+"""
+Negative-axis contour using t = -u², with u = (1+x)/(1-x).
+
+For the inverse square root, this substitution cancels the
+endpoint singularity from inner(t) = 1 / sqrt(-t).
+
+The Jacobian is its positive magnitude, for integration over (-∞, 0].
+"""
+struct SquaredStieltjesContour{T <: Real} <: AbstractStieltjesContour
+    cov::ChangeOfVariables
+
+    function SquaredStieltjesContour{T}() where {T <: Real}
+        cov = ChangeOfVariables(
+            x -> -((one(T) + x) / (one(T) - x))^2,
+            x -> 4 * (one(T) + x) / (one(T) - x)^3,
+        )
+        return new{T}(cov)
+    end
+end
+
+SquaredStieltjesContour() = SquaredStieltjesContour{Float64}()
+
+build(::Type{SquaredStieltjesContour}) = SquaredStieltjesContour()
+
+build(::Type{SquaredStieltjesContour}, λs, contour_buffer) = SquaredStieltjesContour()
+
 
 """
     PacmanContour(r,R,h,θ,c)
@@ -369,7 +399,7 @@ function resolve(P::PacmanContour, total_order::Int)
     return resolve(P, outer_order, inner_order, cut_order)
 end
 
-export AbstractContour, ChangeOfVariables, CircleContour, EllipseContour, PacmanContour,
-    StieltjesContour, build, resolve, transform_intervals
+export AbstractContour, AbstractStieltjesContour, ChangeOfVariables, CircleContour, EllipseContour, PacmanContour,
+    SquaredStieltjesContour, StieltjesContour, build, resolve, transform_intervals
 
 end
