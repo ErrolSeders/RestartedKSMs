@@ -982,7 +982,7 @@ function krylov_approx_quad2(
     return real_res ? fk .|> real : fk
 end
 
-function _lanczos_stieltjes_action(nodes, weights, ρ, T, normb)
+function _lanczos_stieltjes_action(nodes, weights, ρ, T)
 
     e1 = unit_vector(eltype(T), size(T, 1), 1)
 
@@ -1068,7 +1068,7 @@ function _lanczos_stieltjes_restart(
 
         (Q, T, η, qm) = lanczos(A, qm, m)
 
-        gauss_update = _lanczos_stieltjes_action(nodes, weights, ρ, T, normb)
+        gauss_update = _lanczos_stieltjes_action(nodes, weights, ρ, T)
 
         low_bnd = normb * norm(gauss_update)
 
@@ -1091,11 +1091,12 @@ function _lanczos_stieltjes_restart(
 
         Tbar = _radau_extension(T, η, λ, em)
 
-        radau_update = _lanczos_stieltjes_action(nodes, weights, ρ, Tbar, normb)
+        radau_update = _lanczos_stieltjes_action(nodes, weights, ρ, Tbar)
         up_bnd = normb * norm(radau_update)
 
         log_metric!(trace, :low_bnd, low_bnd)
         log_metric!(trace, :up_bnd, up_bnd)
+        log_metric!(trace, :delta_bnd, up_bnd - low_bnd)
 
         if up_bnd < tol
             set_stop!(trace, UpBndAcc)
@@ -1103,6 +1104,7 @@ function _lanczos_stieltjes_restart(
         end
 
         fk .+= update
+
         _check_exact_err(exact, fk, trace)
 
         if update_norm < tol

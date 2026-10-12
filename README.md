@@ -15,4 +15,3 @@ julia> Pluto.run()
 ```
 
 Then the notebooks should be accessible from the Pluto web-server.
-
