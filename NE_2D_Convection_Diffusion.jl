@@ -19,6 +19,9 @@ begin
 	using JLD2
 end
 
+# ╔═╡ ef1f8606-8d47-4037-bd64-d8c62bb2d1bc
+using BenchmarkTools
+
 # ╔═╡ 46730f03-c29a-41e5-be36-d2edd04f5b25
 using KrylovKit
 
@@ -72,9 +75,9 @@ A 2D convection-diffusion problem:
 begin
 	
 	ν = 0
-	n1 = 100
+	n1 = 200
 
-	s = 2 * 10e-4
+	s = 2 * 10e-3
 
 	v = [1,1]
 
@@ -98,7 +101,7 @@ end
 heatmap_res(res) = heatmap(reshape(res,n1,n1))
 
 # ╔═╡ b0a83837-17fc-4686-89ac-ca79875057f1
-m = 20
+m = 70
 
 # ╔═╡ 31576b4d-07fb-4277-ad48-a080830a8b8c
 #=╠═╡
@@ -140,13 +143,13 @@ end
 # ╔═╡ b9542e6d-f17d-407a-96a7-9191fbb3a65b
 r = bestapprox_expm_data(16)
 
-# ╔═╡ d79fddcc-c697-4e71-8010-9b244f4d9bbd
-trace_original = Trace()
-
 # ╔═╡ 20bafe34-4bc8-471b-9049-1228fb8c568a
 #=╠═╡
-reset!(trace_original); res_orig = krylov_approx(exp,sLh,b,m,trace=trace_original,exact=reference)
+trace_original = Trace(); res_orig = krylov_approx(exp,sLh,b,m,trace=trace_original,exact=reference)
   ╠═╡ =#
+
+# ╔═╡ 81c89255-c565-4e22-ac79-7503f12c0f39
+@benchmark krylov_approx($exp,$sLh,$b,$m)
 
 # ╔═╡ 4e6e8c8a-888b-4aa7-85f8-13d1625c28b5
 #=╠═╡
@@ -154,31 +157,35 @@ rel_err(res_orig)
   ╠═╡ =#
 
 # ╔═╡ 8ce088e6-fde0-4916-b3ee-89bb1ee423af
+#=╠═╡
 trace_original
-
-# ╔═╡ 178cb1b3-d0ce-4613-999d-f233cdd418f1
-trace_rational = Trace()
+  ╠═╡ =#
 
 # ╔═╡ d9a219a8-7172-4be3-93c4-6db3ff868c74
 #=╠═╡
-reset!(trace_rational); res_rational = krylov_approx(r,sLh,b,m,trace=trace_rational, exact=reference)
+trace_rational = Trace(); res_rational = krylov_approx(r,sLh,b,m,trace=trace_rational, exact=reference)
   ╠═╡ =#
 
+# ╔═╡ 8aaa92d5-8218-452b-847b-02ee41c1824f
+@benchmark krylov_approx($r,$sLh,$b,$m)
+
 # ╔═╡ ca9d8aa3-61a7-42bb-84b9-ca66f6a4381f
+#=╠═╡
 trace_rational
+  ╠═╡ =#
 
 # ╔═╡ ceae0e51-80b8-447b-8677-11811c3a8d19
 #=╠═╡
 rel_err(res_rational)
   ╠═╡ =#
 
-# ╔═╡ 76e2373c-8be0-4a3c-88f4-84bc7f66443a
-trace_quad1 = Trace()
-
 # ╔═╡ 96518ac3-383a-4efe-86a4-ceca9e075a41
 #=╠═╡
-reset!(trace_quad1); res_quad1 = krylov_approx_quad(exp,sLh,b,m,contour_type=EllipseContour,order=8,quad_tol=1e-12,maxorder=1e6,trace = trace_quad1, exact=reference)
+trace_quad1 = Trace(); res_quad1 = krylov_approx_quad(exp,sLh,b,m,contour_type=EllipseContour,quad_tol=1e-5,contour_safety=1.01,trace = trace_quad1, exact=reference)
   ╠═╡ =#
+
+# ╔═╡ cdd519b1-1d23-4704-8ce0-3278ed17b9e3
+@benchmark krylov_approx_quad($exp,$sLh,$b,$m,contour_type=EllipseContour,quad_tol=1e-10,contour_safety=1.001)
 
 # ╔═╡ d4a47816-23e6-4048-92cd-8820467edd0e
 #=╠═╡
@@ -186,26 +193,32 @@ heatmap_res(res_quad1)
   ╠═╡ =#
 
 # ╔═╡ 3a1a7c8f-f7d2-4fa8-b7e0-305df4d76748
+#=╠═╡
 trace_quad1
+  ╠═╡ =#
 
 # ╔═╡ b54d537d-339f-4419-8f5a-a48004cd3dc4
+#=╠═╡
 trace_quad1.metrics[:quad_err]
+  ╠═╡ =#
 
 # ╔═╡ 675832ff-9b17-4582-a293-57e9fe21e730
+#=╠═╡
 trace_quad1.metrics[:abs_err]
+  ╠═╡ =#
 
 # ╔═╡ 2ab86fbe-3fe4-4bd4-9cf3-88fdd6ec94d5
 #=╠═╡
 rel_err(res_quad1)
   ╠═╡ =#
 
-# ╔═╡ ece9ae7b-9c0e-41e1-a8a2-b33eed97de45
-trace_quad2 = Trace()
-
 # ╔═╡ 766341a6-0b6c-489b-a1c8-7473ec15003a
 #=╠═╡
-reset!(trace_quad2); res_quad2 = krylov_approx_quad2(exp,sLh,b,m,contour_type=EllipseContour,quad_tol=1e-16,trace=trace_quad2,exact=reference)
+trace_quad2 = Trace(); res_quad2 = krylov_approx_quad2(exp,sLh,b,m,contour_type=EllipseContour,quad_tol=1e-14,trace=trace_quad2,contour_safety=1.001,exact=reference)
   ╠═╡ =#
+
+# ╔═╡ 19f92045-46b2-4dae-8143-496155064fa8
+@benchmark krylov_approx_quad2($exp,$sLh,$b,$m,contour_type=EllipseContour,quad_tol=1e-14,contour_safety=1.001)
 
 # ╔═╡ 9d4ab100-340f-401a-a0fd-1476d868d53b
 #=╠═╡
@@ -213,13 +226,19 @@ rel_err(res_quad2)
   ╠═╡ =#
 
 # ╔═╡ fcf04aeb-5ef1-4f95-9881-f5ad44492dec
+#=╠═╡
 trace_quad2
+  ╠═╡ =#
 
 # ╔═╡ 433f1a91-7c55-4638-ab32-21b3c3fb5f43
+#=╠═╡
 trace_quad2.metrics[:abs_err]
+  ╠═╡ =#
 
 # ╔═╡ 8f1a5cad-7f01-462f-90e8-4dbe5d97c183
+#=╠═╡
 trace_quad2.metrics[:update_norm]
+  ╠═╡ =#
 
 # ╔═╡ 81a9a11c-30f0-4d4e-8b35-edbcc168db40
 begin
@@ -242,39 +261,39 @@ begin
 end
 
 # ╔═╡ 9351989b-0086-4cf2-9cb1-a52f747ed303
-df = traces_to_dataframe([trace_original, trace_rational, trace_quad1, trace_quad2],["Original", "Rational_Approximation", "Quadrature-Paper","Quadrature-Adaptive"])
+#=╠═╡
+df = traces_to_dataframe([trace_original, trace_rational, trace_quad1, trace_quad2],["RKSM-EE", "RKSM-AEEG", "RKSM-FGS","RKSM-FGS-QuadGK"])
+  ╠═╡ =#
 
 # ╔═╡ b29c7f1e-e1fa-4131-b3fc-a868feaaa742
+#=╠═╡
 begin
 	p = data(df) *
-    mapping(:restart, :abs_err, color=:algorithm) *
+    mapping(:restart => "Restart", :abs_err => "Absolute Error", color=:algorithm => "Algorithm") *
     (visual(Lines) + visual(Scatter, marker=:x))
 	
-	draw(p, 
+	plot = draw(p, 
 		 axis = (; 
 				 xminorticksvisible= true,
 				 yminorticksvisible = true, 
 				 yminorgridvisible = true,
         		 yminorticks = IntervalsBetween(5), 
 				 yscale = log10, 
-				 limits = ((0,8), (10e-16, 10e0))
+				 limits = ((0,10), (10e-16, 10e0))
 				),
 		 legend =(
 			 framevisible=false,
 			),
 		 figure = (;
-			 title = "Absolute Error for Restart Length $(m)",
 			 size=(850,650)
 		 )
 		)	
 end
+  ╠═╡ =#
 
-# ╔═╡ bb0390a0-10c9-45c6-b4b8-66c81b86c73b
+# ╔═╡ 865068b8-8fbd-499b-aa7e-7b92a1f46ba1
 #=╠═╡
-begin
-	b = ones(n1^2)
-	b = b / norm(b)	
-end
+save("plots/m$(m)_abserr_CD_Herm.png", plot)
   ╠═╡ =#
 
 # ╔═╡ 33ae60c1-d09a-416a-aff1-a3601e9b9ea5
@@ -286,10 +305,19 @@ begin
 end
   ╠═╡ =#
 
+# ╔═╡ bb0390a0-10c9-45c6-b4b8-66c81b86c73b
+#=╠═╡
+begin
+	b = ones(n1^2)
+	b = b / norm(b)	
+end
+  ╠═╡ =#
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
@@ -299,6 +327,7 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [compat]
 AlgebraOfGraphics = "~0.13.1"
+BenchmarkTools = "~1.8.0"
 CairoMakie = "~0.15.13"
 DataFrames = "~1.8.2"
 JLD2 = "~0.6.5"
@@ -311,7 +340,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.12.7"
 manifest_format = "2.0"
-project_hash = "2e241ed4f1b592eb01ac162118d906ed86615fb1"
+project_hash = "af851596d443e2bf4d38c1398b604d5830e66fa9"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -432,6 +461,12 @@ version = "1.11.0"
 git-tree-sha1 = "8c290a1b223deaeea9aea44b235d24546da8eb98"
 uuid = "18cc8868-cbac-4acf-b575-c8ff214dc66f"
 version = "1.4.0"
+
+[[deps.BenchmarkTools]]
+deps = ["Compat", "JSON", "Logging", "PrecompileTools", "Printf", "Profile", "Statistics", "UUIDs"]
+git-tree-sha1 = "9670d3febc2b6da60a0ae57846ba74670290653f"
+uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+version = "1.8.0"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -1572,6 +1607,11 @@ deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 version = "1.11.0"
 
+[[deps.Profile]]
+deps = ["StyledStrings"]
+uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
+version = "1.11.0"
+
 [[deps.ProgressMeter]]
 deps = ["Distributed", "Printf"]
 git-tree-sha1 = "fbb92c6c56b34e1a2c4c36058f68f332bec840e7"
@@ -2169,6 +2209,7 @@ version = "4.1.0+0"
 
 # ╔═╡ Cell order:
 # ╠═75aeda5a-1cdd-4ab2-bf1b-a5a3fafe4e01
+# ╠═ef1f8606-8d47-4037-bd64-d8c62bb2d1bc
 # ╠═539c2677-0703-4300-b057-a9413a039c4f
 # ╠═677ed6b4-b198-447d-9abd-799b1f7be65b
 # ╠═0772c910-9639-4659-963d-fdfe18ccdb77
@@ -2184,23 +2225,23 @@ version = "4.1.0+0"
 # ╠═a2c34570-aa91-48d3-99ec-077ce6cb5bed
 # ╠═0fe1b742-32a9-4ed1-bc61-77d8bdd04912
 # ╠═b9542e6d-f17d-407a-96a7-9191fbb3a65b
-# ╠═d79fddcc-c697-4e71-8010-9b244f4d9bbd
 # ╠═20bafe34-4bc8-471b-9049-1228fb8c568a
+# ╠═81c89255-c565-4e22-ac79-7503f12c0f39
 # ╠═4e6e8c8a-888b-4aa7-85f8-13d1625c28b5
 # ╠═8ce088e6-fde0-4916-b3ee-89bb1ee423af
-# ╠═178cb1b3-d0ce-4613-999d-f233cdd418f1
 # ╠═d9a219a8-7172-4be3-93c4-6db3ff868c74
+# ╠═8aaa92d5-8218-452b-847b-02ee41c1824f
 # ╠═ca9d8aa3-61a7-42bb-84b9-ca66f6a4381f
 # ╠═ceae0e51-80b8-447b-8677-11811c3a8d19
-# ╠═76e2373c-8be0-4a3c-88f4-84bc7f66443a
 # ╠═96518ac3-383a-4efe-86a4-ceca9e075a41
+# ╠═cdd519b1-1d23-4704-8ce0-3278ed17b9e3
 # ╠═d4a47816-23e6-4048-92cd-8820467edd0e
 # ╠═3a1a7c8f-f7d2-4fa8-b7e0-305df4d76748
 # ╠═b54d537d-339f-4419-8f5a-a48004cd3dc4
 # ╠═675832ff-9b17-4582-a293-57e9fe21e730
 # ╠═2ab86fbe-3fe4-4bd4-9cf3-88fdd6ec94d5
-# ╠═ece9ae7b-9c0e-41e1-a8a2-b33eed97de45
 # ╠═766341a6-0b6c-489b-a1c8-7473ec15003a
+# ╠═19f92045-46b2-4dae-8143-496155064fa8
 # ╠═9d4ab100-340f-401a-a0fd-1476d868d53b
 # ╠═fcf04aeb-5ef1-4f95-9881-f5ad44492dec
 # ╠═433f1a91-7c55-4638-ab32-21b3c3fb5f43
@@ -2209,5 +2250,6 @@ version = "4.1.0+0"
 # ╠═81a9a11c-30f0-4d4e-8b35-edbcc168db40
 # ╠═9351989b-0086-4cf2-9cb1-a52f747ed303
 # ╠═b29c7f1e-e1fa-4131-b3fc-a868feaaa742
+# ╠═865068b8-8fbd-499b-aa7e-7b92a1f46ba1
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

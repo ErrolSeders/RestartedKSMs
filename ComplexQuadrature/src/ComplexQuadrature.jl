@@ -143,7 +143,7 @@ function EllipseContour(
     return EllipseContour(complex(min), complex(max), real_safety, imaginary_safety)
 end
 
-function build(::Type{EllipseContour}, λs, contour_buffer)
+function build(::Type{EllipseContour}, λs, contour_buffer, height_scale = 0.02)
     isempty(λs) && throw(ArgumentError("cannot build an ellipse from an empty collection"))
     isfinite(contour_buffer) && contour_buffer > 0 ||
         throw(ArgumentError("contour_buffer must be finite and positive"))
@@ -182,8 +182,8 @@ function build(::Type{EllipseContour}, λs, contour_buffer)
     # non-degenerate while making the added width negligible relative to the
     # scale of the spectrum.
     scale = max(one(R), major_radius, minor_radius)
-    minor_radius = max(minor_radius, 0.15 * scale)
-    major_radius = max(major_radius, 0.15 * scale)
+    minor_radius = max(minor_radius, height_scale * scale)
+    major_radius = max(major_radius, height_scale * scale)
 
     # Bounding-box radii alone do not always contain points in the corners of
     # the box. Scale by the largest normalized radius before applying the
@@ -333,9 +333,26 @@ function PacmanContour(r::T, R::T, h::T, θ::T, c::Complex{T}) where {T <: Real}
 
     dz_up = _ -> (sR - sr) / 2 * cis(θ)
 
-    full_zmap = x -> x < -0.3 ? z_out(transform_intervals(x, (-1, -0.3), (0.0, 1.0))) : x <= -0.1 ? z_up(transform_intervals(x, (-0.3, -0.1))) : x <= 0.1 ? z_in(transform_intervals(x, (-0.1, 0.1))) : x <= 0.3 ? z_low(transform_intervals(x, (0.1, 0.3))) : x <= 1.0 ? z_out(transform_intervals(x, (0.3, 1.0), (-1.0, 0.0))) : z_out(0.0)
+    # runic: off
+    # outer upper-left -> right -> lower-left
+    # lower channel outer -> inner
+    # inner circle lower -> upper
+    # upper channel inner -> outer
+    # outer upper-left -> right
+    full_zmap = x ->
+        x < -0.3 ? z_out(transform_intervals(x, (-1, -0.3), (-1, 0))) :
+        x <= -0.1 ? z_low(transform_intervals(x, (-0.3, -0.1))) :
+        x <=  0.1 ? z_in(transform_intervals(x, (-0.1,  0.1))) :
+        x <=  0.3 ? z_up(transform_intervals(x, ( 0.1,  0.3))) :
+                     z_out(transform_intervals(x, ( 0.3, 1), (0, 1)))
 
-    full_dzmap = x -> x < -0.3 ? (1 / 0.7) * dz_out(transform_intervals(x, (-1, -0.3), (0.0, 1.0))) : x <= -0.1 ? 10 * dz_up(transform_intervals(x, (-0.3, -0.1))) : x <= 0.1 ? 10 * dz_in(transform_intervals(x, (-0.1, 0.1))) : x <= 0.3 ? 10 * dz_low(transform_intervals(x, (0.1, 0.3))) : x <= 1.0 ? (1 / 0.7) * dz_out(transform_intervals(x, (0.3, 1.0), (-1.0, 0.0))) : dz_out(0.0)
+    full_dzmap = x ->
+        x < -0.3 ? (1 / 0.7) * dz_out(transform_intervals(x, (-1, -0.3), (-1, 0))) :
+        x <= -0.1 ? 10 * dz_low(transform_intervals(x, (-0.3, -0.1))) :
+        x <=  0.1 ? 10 * dz_in(transform_intervals(x, (-0.1,  0.1))) :
+        x <=  0.3 ? 10 * dz_up(transform_intervals(x, ( 0.1,  0.3))) :
+                     (1 / 0.7) * dz_out(transform_intervals(x, (0.3, 1), (0, 1)))
+    # runic: on
 
     return PacmanContour(
         ChangeOfVariables(full_zmap, full_dzmap),
@@ -393,9 +410,13 @@ end
     Return the nodes and weights for the given Pacman contour. Attempts to divide the nodes across each segment with the majority going to the outer circle.
 """
 function resolve(P::PacmanContour, total_order::Int)
-    outer_order = max(8, floor(Int, total_order * 0.4))
-    inner_order = max(4, floor(Int, total_order * 0.2))
-    cut_order = max(4, floor(Int, total_order * 0.2))
+    total_order >= 4 ||
+        throw(ArgumentError("Pacman quadrature requires at least 4 nodes"))
+
+    inner_order = max(1, floor(Int, total_order * 0.2))
+    cut_order = max(1, floor(Int, total_order * 0.2))
+    outer_order = total_order - inner_order - 2cut_order
+
     return resolve(P, outer_order, inner_order, cut_order)
 end
 

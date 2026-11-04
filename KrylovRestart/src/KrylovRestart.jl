@@ -5,10 +5,13 @@ using LinearAlgebra
 using SparseArrays
 using KrylovKit
 using Integrals
+using Logging
 
 if Sys.ARCH == :aarch64
     using AppleAccelerate
 end
+
+
 
 include("./stopcode.jl")
 include("./tracing.jl")

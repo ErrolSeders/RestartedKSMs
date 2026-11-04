@@ -59,28 +59,16 @@ heatmap_res(res) = heatmap(reshape(res,n1,n1))
 # ╔═╡ 6fb1d88c-c952-451f-840d-70f58568bacd
 invsqrt = inv ∘ sqrt
 
-# ╔═╡ 44c37768-5e30-401e-a7f3-af093676387f
-begin
-	b = ones(n1^2)
-	b = b / norm(b)
-end
-
-# ╔═╡ 9c561c24-d0ef-4113-b704-75613714f371
-# ╠═╡ disabled = true
-#=╠═╡
-begin
-	b = randn(n1^2) * 100
-	b = b / norm(b)
-end
-  ╠═╡ =#
-
 # ╔═╡ dd001e73-1af2-42e1-b86f-5bc406bd6d10
+#=╠═╡
 heatmap_res(b)
+  ╠═╡ =#
 
 # ╔═╡ ed634488-2e06-4a59-8ec7-a2fce4d7da15
 #Cond Lh with n1 = 100 ≈ 4080.4 :(
 
 # ╔═╡ bf2b5f42-6316-490b-b909-ef9a333ba4ea
+#=╠═╡
 begin
 	μ, Q = eigen(T)
 	Μ = diagm(μ) |> sparse
@@ -89,27 +77,33 @@ begin
 	U = spdiagm(invsqrt.(diag(Μ ⊗ Id + Id ⊗ Μ)))
 	reference = h * Qkron * U * Qkronb
 end
+  ╠═╡ =#
 
 # ╔═╡ 5aaf7260-b247-401b-b66b-002f0dbe4a03
+#=╠═╡
 heatmap_res(reference)
+  ╠═╡ =#
 
 # ╔═╡ d0fcd886-9350-4904-928f-de9e82a1acff
 m = 50
 
 # ╔═╡ bf50905d-726d-43a6-95e6-150669953fb0
-trace_original = Trace(); res = krylov_approx(invsqrt,Lh,b,m,trace=trace_original,max_restarts=60,exact=reference)
-
-# ╔═╡ 0517f10c-8a8e-4854-bf5d-a3c9606be76b
-begin
-	bench_kry1 = @benchmarkable krylov_approx($invsqrt,$Lh,$b,$m,max_restarts=60)
-	run(bench_kry1, samples=5)
-end
+#=╠═╡
+trace_original = Trace(); res = krylov_approx(invsqrt,Lh,b,m,trace=trace_original,tol=1e-13,max_restarts=60,exact=reference)
+  ╠═╡ =#
 
 # ╔═╡ b7c4f09a-db5f-4467-9447-9895eef48083
+#=╠═╡
 trace_original
+  ╠═╡ =#
 
 # ╔═╡ 389353ac-a5db-4c66-b430-57ca5cc93ab0
+#=╠═╡
 norm(reference - res) / norm(reference)
+  ╠═╡ =#
+
+# ╔═╡ fa13dd3f-0130-4138-9399-dc36fc4a538f
+
 
 # ╔═╡ 32219cbe-c3d8-43ba-b679-6c0a69ce5a04
 md"""
@@ -117,105 +111,131 @@ This is the absolute & relative error of the approximation after a single restar
 """
 
 # ╔═╡ 436cd93d-c9a5-4ed6-a496-f0476cdb07ef
+#=╠═╡
 begin 
 	(V,H,η,qm) = lanczos(Lh,b,m)
 	first_restart = V * invsqrt(H)[1,:]
 	norm(reference - first_restart), norm(reference - first_restart) / norm(reference)
 end
+  ╠═╡ =#
 
 # ╔═╡ c947cf07-f771-4967-9878-5dda0c1af841
+#=╠═╡
 eigen(H)
+  ╠═╡ =#
 
 # ╔═╡ ba63609d-543d-429f-9562-c125c9d9a672
+#=╠═╡
 first_restart
+  ╠═╡ =#
 
 # ╔═╡ f2568672-c417-45f6-b386-380289e706e6
-trace_quad = Trace(); res2 = krylov_approx_quad(invsqrt,Lh,b,m,trace=trace_quad,max_restarts=60,contour_type=PacmanContour,maxorder=1e6,quad_tol=1e-12,exact=reference,contour_safety=1.001)
+#=╠═╡
+trace_quad = Trace(); res2 = krylov_approx_quad(invsqrt,Lh,b,m,trace=trace_quad,max_restarts=60,contour_type=PacmanContour,quad_tol=1e-13,stop_tol=1e-13,exact=reference,contour_safety=1.1)
+  ╠═╡ =#
 
 # ╔═╡ 9f193c2e-48d2-4acd-a569-f1b37f7dbd13
+#=╠═╡
 trace_quad
+  ╠═╡ =#
 
 # ╔═╡ 567073e3-c61f-47b5-ade8-e2b12afc23fd
+#=╠═╡
 trace_quad.metrics[:update_norm]
+  ╠═╡ =#
 
 # ╔═╡ cbb5cba4-9429-480d-9972-49c11549eaf9
+#=╠═╡
 trace_quad.metrics[:abs_err]
+  ╠═╡ =#
 
 # ╔═╡ 3596ff4c-9ec7-45c1-8b8d-5402ed599d88
+#=╠═╡
 norm(reference - (res2 .|> real)) / norm(reference)
+  ╠═╡ =#
 
 # ╔═╡ 442fffdc-0fe7-46a8-abeb-021ae9abc0e0
-trace_quad2 = Trace(); res3 = krylov_approx_quad2(invsqrt, Lh, b, m, trace=trace_quad2,max_restarts=60,exact=reference,contour_type=PacmanContour,quad_tol=1e-16,contour_safety=1.001)
-
-# ╔═╡ 6836225e-dd1c-4523-b02b-98de21b1fcfb
-begin
-	bench_kry2 = @benchmarkable krylov_approx_quad2($invsqrt,$Lh,$b,$m,max_restarts=60,contour_type=PacmanContour,quad_tol=1e-16,contour_safety=1.001)
-	run(bench_kry2)
-end
+#=╠═╡
+trace_quad2 = Trace(); res3 = krylov_approx_quad2(invsqrt, Lh, b, m, trace=trace_quad2,max_restarts=60,exact=reference,contour_type=PacmanContour,quad_tol=1e-16,stop_tol=1e-13,contour_safety=1.1)
+  ╠═╡ =#
 
 # ╔═╡ ac33e289-9d15-4bcc-88a8-d9621c394636
+#=╠═╡
 norm(reference - res3) / norm(reference)
+  ╠═╡ =#
 
 # ╔═╡ 46ad7c94-ef59-4080-9f7d-9a6116e4a7be
+#=╠═╡
 trace_quad2
+  ╠═╡ =#
 
 # ╔═╡ 06457149-bada-4ba7-97d3-e38b50763351
+#=╠═╡
 trace_quad2.metrics[:update_norm]
+  ╠═╡ =#
 
 # ╔═╡ f0efc690-7974-40b4-89a0-e5b94f47f044
 invsqrt_stjes = inverse_pth_root(2)
 
 # ╔═╡ bf16c9e0-c528-4908-b8dd-3c06f10f7b3f
-trace_stieltjes_1 = Trace(); res4 = krylov_approx_quad(invsqrt_stjes,Lh,b,m,quad_tol=3e-10,maxorder=1e7,trace=trace_stieltjes_1,exact=reference)
-
-# ╔═╡ fcc931e6-0fda-4afb-a5fa-1bc36915498d
-begin
-	bench_kry3 = @benchmarkable krylov_approx_quad($invsqrt_stjes,$Lh,$b,$m,max_restarts=60,quad_tol=3e-10,maxorder=1e7)
-	run(bench_kry3)
-end
-
-# ╔═╡ 70b959c3-e6e2-4d1f-aea5-94af92a1b4bb
-md"""
-This method does not converge to an accurate answer because of the quadrature rule. There is a singularity at -∞ and I'm using a global Möbius transform from (-∞,0] to [-1,1] with a fixed Guass-Legendre quadrature rule. More nodes are placed near the endpoints, but its not able to account for the integrable singularity properly. Increasing the order could fix the problem, but very very slowly, to the point where it is infeasible. 
-"""
+#=╠═╡
+trace_stieltjes_1 = Trace(); res4 = krylov_approx_quad(invsqrt_stjes,Lh,b,m,quad_tol=1e-13,stop_tol=1e-13,trace=trace_stieltjes_1,exact=reference,contour_type=SquaredStieltjesContour)
+  ╠═╡ =#
 
 # ╔═╡ 0098f654-391a-4f90-90db-37e30bc94fe7
+#=╠═╡
 norm(reference - res4) / norm(reference)
+  ╠═╡ =#
 
 # ╔═╡ 17ceb2d2-0192-4ecd-9adf-697d9ba698fa
+#=╠═╡
 trace_stieltjes_1
+  ╠═╡ =#
 
 # ╔═╡ d84fa034-2d55-4640-bbbe-b121bc1867fb
+#=╠═╡
 trace_stieltjes_1.metrics[:quad1_order]
+  ╠═╡ =#
 
 # ╔═╡ 51b0ffb4-5dd1-493a-a16a-0df3641ced46
+#=╠═╡
 trace_stieltjes_1.metrics[:quad_err]
+  ╠═╡ =#
 
 # ╔═╡ 6865682e-3019-4528-ae84-a9f91aa1cafa
-trace_stieltjes_2 = Trace(); res5 = krylov_approx_quad2(invsqrt_stjes, Lh, b, m, trace=trace_stieltjes_2,exact=reference)
-
-# ╔═╡ e4760f5c-672c-439c-a898-5404bd5e673e
-md"""
-This method succeeds because QuadGK uses Gauss-Kronrod quadrature over the entire improper integral. The singularity at -∞ can be properly handled.
-"""
+#=╠═╡
+trace_stieltjes_2 = Trace(); res5 = krylov_approx_quad2(invsqrt_stjes, Lh, b, m, trace=trace_stieltjes_2,exact=reference,stop_tol=1e-13)
+  ╠═╡ =#
 
 # ╔═╡ 98802a63-a6cb-4e9c-8900-d608b31ffd02
+#=╠═╡
 norm(reference - res5) / norm(reference)
+  ╠═╡ =#
 
 # ╔═╡ 86db8b9a-2670-4530-94a7-f1e8f0e2eaf8
+#=╠═╡
 trace_stieltjes_2
+  ╠═╡ =#
 
 # ╔═╡ 393eb5e4-ea4f-4b07-9780-a1e8d14be905
-trace_stieltjes_3 = Trace(); res_stieltjes_3 = krylov_approx_stieltjes(invsqrt_stjes,Lh,b,m,trace=trace_stieltjes_3,order=60,exact=reference)
+#=╠═╡
+trace_stieltjes_3 = Trace(); res_stieltjes_3 = krylov_approx_stieltjes(invsqrt_stjes,Lh,b,m,trace=trace_stieltjes_3,order=60,exact=reference,tol=1e-13)
+  ╠═╡ =#
 
 # ╔═╡ 5b5c7ed8-8ac6-4bc1-848f-e0c26a938d0e
+#=╠═╡
 trace_stieltjes_3
+  ╠═╡ =#
 
 # ╔═╡ 215dbca6-f1ac-4c63-b259-b89413156ee4
+#=╠═╡
 norm(reference - res_stieltjes_3) / norm(reference)
+  ╠═╡ =#
 
 # ╔═╡ 9889e59e-2a58-4974-85ac-c38dd43dcb75
+#=╠═╡
 heatmap_res(res_stieltjes_3)
+  ╠═╡ =#
 
 # ╔═╡ d2698ab2-768c-4e4a-bfb2-ce587e7266db
 begin
@@ -238,15 +258,18 @@ begin
 end
 
 # ╔═╡ 27eac18c-cbc6-4414-82cb-50dbce71533c
+#=╠═╡
 df = traces_to_dataframe([trace_original, trace_quad, trace_quad2, trace_stieltjes_1, trace_stieltjes_2,trace_stieltjes_3],["RKSM-EE", "RKSM-FGS", "RKSM-FGS-QuadGK","RKSM-FGS-Stieltjes","RKSM-FGS-Stieltjes-QuadGK", "RKSM-FS"])
+  ╠═╡ =#
 
 # ╔═╡ ded25da0-34c6-4db6-a084-beaa93f1f942
+#=╠═╡
 begin
 	p = data(df) *
     mapping(:restart => "Restart Cycle", :abs_err => "Absolute Error", color=:algorithm => "Algorithm") *
-    (visual(Lines,alpha=0.3) + visual(Scatter, marker=:x, alpha=0.6))
+    (visual(Lines) + visual(Scatter,marker=:x))
 	
-	draw(p, 
+	plot = draw(p, 
 		 axis = (; 
 				 xminorticksvisible= true,
 				 yminorticksvisible = true, 
@@ -256,98 +279,281 @@ begin
 				 limits = ((0,24), (10e-17, 10e-2))
 				),
 		 legend =(
+			 position=:bottom,
+			 nbanks = 2,
 			 framevisible=false,
 			),
 		 figure = (;
-			 title = "Absolute Error for Restart Length $(m)",
-			 size=(850,650)
+			 size=(600,600)
 		 )
 		)	
 end
+  ╠═╡ =#
+
+# ╔═╡ d5680e70-446a-48a2-bb0d-6f93489df990
+#=╠═╡
+save("plots/m$(m)_n$(n1)_InvSqrt_abserr.png",plot)
+  ╠═╡ =#
 
 # ╔═╡ d0bb30d6-d874-4ce2-9bbc-a7f634293e1e
+#=╠═╡
 df_stltjs_3 = DataFrame(
 	restart = 2:trace_stieltjes_3.restarts,
 	abs_err = trace_stieltjes_3.metrics[:abs_err],
 	up_bnd = trace_stieltjes_3.metrics[:up_bnd],
-	low_bnd = trace_stieltjes_3.metrics[:low_bnd]
+	low_bnd = trace_stieltjes_3.metrics[:low_bnd],
+	delta_bnd = trace_stieltjes_3.metrics[:delta_bnd]
 )
+  ╠═╡ =#
 
 # ╔═╡ 7252e3a5-962b-4cc9-b9a6-851556be835e
+#=╠═╡
 begin 
 	dat = data(df_stltjs_3)
 
 p1 = dat *
     mapping(:restart => "Restart Cycle", :abs_err => "Absolute Error") *
-    (visual(Lines) + visual(Scatter, marker=:x)) * 	visual(color=:tomato)
+    (visual(Lines) + visual(Scatter, marker=:x)) * 	visual(color=:tomato, label="Absolute Error")
 
 p2 = dat * mapping(:restart => "Restart Cycle", :up_bnd => "Upper Bound") *
-	 (visual(Lines, linestyle=:dash) + visual(Scatter, marker=:+)) * visual(color = :cornflowerblue)
+	 (visual(Lines, linestyle=:dash) + visual(Scatter, marker=:+)) * visual(color = :cornflowerblue, label="Upper Bound")
 
 p3 = dat * mapping(:restart => "Restart Cycle", :low_bnd => "Lower Bound") *
-	 (visual(Lines, linestyle=:dash) + visual(Scatter, marker=:+)) * visual(color = :lightslateblue)
+	 (visual(Lines, linestyle=:dash) + visual(Scatter, marker=:+)) * visual(color = :lightslateblue, label="Lower Bound")
 
 p4 = p1 + p2 + p3
-	draw(p4, 
+	plot2 = draw(p4, 
 		 axis = (; 
 				 xminorticksvisible= true,
 				 yminorticksvisible = true, 
 				 yminorgridvisible = true,
         		 yminorticks = IntervalsBetween(5), 
 				 yscale = log10, 
-				 limits = ((0,24), (10e-18, 10e-2))
+				 limits = ((0,20), (10e-18, 10e-2))
 				),
 		 legend =(
+			 position=:bottom,
 			 framevisible=false,
 			),
 		 figure = (;
-			 title = "RKSM-FS Error Bounds for Restart Length $(m)",
-			 size=(850,650)
+			 size=(600,600)
 		 )
 		)	
 end
+  ╠═╡ =#
+
+# ╔═╡ b02842d4-3c0e-44b0-8652-df1d1fdff99b
+#=╠═╡
+save("plots/m$(m)_n$(n1)_RKSMFS_errbnds.png", plot2)
+  ╠═╡ =#
 
 # ╔═╡ 956a375a-3565-4882-8619-7ccb49ad7b99
+#=╠═╡
 df_original = DataFrame(
 	restart = 1:trace_original.restarts,
 	abs_err = trace_original.metrics[:abs_err],
 	up_bnd = trace_original.metrics[:up_bnd],
 	low_bnd = trace_original.metrics[:low_bnd]
 )
+  ╠═╡ =#
 
-# ╔═╡ 46ef47d1-6865-489c-915b-f1852633f995
-begin 
-	dat2 = data(df_original)
+# ╔═╡ 9cd13a79-cdbf-4faf-a081-27799b39650e
+#=╠═╡
+begin
+plt_delta = data(df_stltjs_3) * mapping(:restart => "Restart Cycle", (:abs_err, :low_bnd) => (abs ∘ -) => "Low Bound and Absolute Error Difference") *
+    (visual(Lines) + visual(Scatter, marker=:+)) * 	visual(color=:cornflowerblue, label="FKSM-FS Bound Error Difference")
 
-p5 = dat2 *
-    mapping(:restart => "Restart Cycle", :abs_err => "Absolute Error") *
-    (visual(Lines) + visual(Scatter, marker=:x)) * 	visual(color=:tomato)
+plt_delta2 = data(df_original) * mapping(:restart => "Restart Cycle", (:abs_err, :low_bnd) => (abs ∘ -) => "Low Bound and Absolute Bound Error Difference") * (visual(Lines) + visual(Scatter, marker=:x)) * 	visual(color=:tomato, label="RKSM-EE Bound Error Difference")
 
-p6 = dat2 * mapping(:restart => "Restart Cycle", :up_bnd => "Upper Bound") *
-	 (visual(Lines, linestyle=:dash) + visual(Scatter, marker=:+)) * visual(color = :cornflowerblue)
-
-p7 = dat2 * mapping(:restart => "Restart Cycle", :low_bnd => "Lower Bound") *
-	 (visual(Lines, linestyle=:dash) + visual(Scatter, marker=:+)) * visual(color = :lightslateblue)
-
-p8 = p5 + p6 + p7
-	draw(p8, 
+draw(plt_delta + plt_delta2, 
 		 axis = (; 
 				 xminorticksvisible= true,
 				 yminorticksvisible = true, 
 				 yminorgridvisible = true,
         		 yminorticks = IntervalsBetween(5), 
 				 yscale = log10, 
-				 limits = ((0,24), (10e-18, 10e-2))
+				 limits = ((0,24), (10e-16, 10e-2))
 				),
 		 legend =(
 			 framevisible=false,
 			),
 		 figure = (;
-			 title = "RKSM-EE Error Bounds for Restart Length $(m)",
+			 title = "Difference of Low Bound and Absolute Error for RKSM-EE and RKSM-FS",
+			 size=(850,650)
+		 )
+		)
+end
+  ╠═╡ =#
+
+# ╔═╡ 46ef47d1-6865-489c-915b-f1852633f995
+#=╠═╡
+begin 
+	dat2 = data(df_original)
+
+p5 = dat2 *
+    mapping(:restart => "Restart Cycle", :abs_err => "Absolute Error") *
+    (visual(Lines) + visual(Scatter, marker=:x)) * 	visual(color=:tomato,label = "Absolute Error")
+
+p6 = dat2 * mapping(:restart => "Restart Cycle", :up_bnd => "Upper Bound") *
+	 (visual(Lines, linestyle=:dash) + visual(Scatter, marker=:+)) * visual(color = :cornflowerblue, label = "Upper Bound")
+
+p7 = dat2 * mapping(:restart => "Restart Cycle", :low_bnd => "Lower Bound") *
+	 (visual(Lines, linestyle=:dash) + visual(Scatter, marker=:+)) * visual(color = :lightslateblue, label = "Lower Bound")
+
+p8 = p5 + p6 + p7
+	plot3 = draw(p8, 
+		 axis = (; 
+				 xminorticksvisible= true,
+				 yminorticksvisible = true, 
+				 yminorgridvisible = true,
+        		 yminorticks = IntervalsBetween(5), 
+				 yscale = log10, 
+				 limits = ((0,20), (10e-18, 10e-2))
+				),
+		 legend =(
+			 position=:bottom,
+			 framevisible=false,
+			),
+		 figure = (;
+			 size=(600,600)
+		 )
+		)	
+end
+  ╠═╡ =#
+
+# ╔═╡ d7f65819-8bbc-4f5e-be0f-e4077903ec40
+#=╠═╡
+save("plots/m$(m)_n$(n1)_RKSMEE_errbnds.png", plot3)
+  ╠═╡ =#
+
+# ╔═╡ bc14ae65-5e28-4d79-ac89-5b5124cd6a6d
+function quad_method_trace_to_dataframe(trace,algorithm) 
+	n = length(trace.metrics[:quad_err])
+
+	restarts = first.(trace.metrics[:quad_err])
+	errors = last.(trace.metrics[:quad_err])
+	
+	return DataFrame(
+	    algorithm = fill(algorithm, n),
+	    restart = restarts,
+		quad_error = errors,
+		quad_order = last.(trace.metrics[:quad1_order])
+	)
+end	
+
+# ╔═╡ 7bc3c320-a869-4d15-b4fa-595f80951c6e
+#=╠═╡
+df_quad_stltjs_1 = quad_method_trace_to_dataframe(trace_stieltjes_1,"RKSM-FGS-Stieltjes")
+  ╠═╡ =#
+
+# ╔═╡ 760c8207-23a1-4218-86c5-b4f563d8a5df
+#=╠═╡
+df_quad = quad_method_trace_to_dataframe(trace_quad,"RKSM-FGS")
+  ╠═╡ =#
+
+# ╔═╡ 0d4d8d06-8b19-4220-b8bb-a66913e00baf
+function plot_quad_errs(df)
+    transform!(
+        groupby(df, :restart),
+        :quad_error => (x -> collect(eachindex(x))) => :evaluation
+    )
+
+	 plt = data(df) *
+        mapping(
+            :restart => "Restart",
+            :quad_error => "Quadrature error",
+            color = :evaluation => "Evaluation within restart"
+        ) *
+        visual(Scatter, markersize = 10, marker=:xcross)
+
+   	draw(plt, 
+		 axis = (; 
+				 xminorticksvisible= true,
+				 yminorticksvisible = true, 
+				 yminorgridvisible = true,
+        		 yminorticks = IntervalsBetween(5), 
+				 yscale = log10, 
+				 limits = ((0,24), (10e-25, 10e-2))
+				),
+		 legend =(
+			 framevisible=false,
+			),
+		 figure = (;
+			 title = "Quadrature Error Within Restarts",
 			 size=(850,650)
 		 )
 		)	
 end
+
+# ╔═╡ 414742d2-3ea3-4d98-aa18-a75b78284982
+function plot_quad_order(df)
+	# last row per restart = order that was finally used for that restart
+	last_per_restart = combine(
+		groupby(df, :restart),
+		:quad_order => last => :quad_order,
+		:quad_error => last => :quad_error,
+		:algorithm  => first => :algorithm,
+	)
+	last_per_restart.label = string.(round.(last_per_restart.quad_error; sigdigits = 3))
+
+	base = data(last_per_restart) *
+		mapping(
+			:restart => "Restart",
+			:quad_order => "Quadrature Order",
+		)
+
+	points = base * visual(ScatterLines, color=:cornflowerblue)
+
+	#annotations = base *
+		# mapping(text = :label => verbatim) *
+		# visual(Makie.Text;
+		# 	rotation = π / 4,          # skew the labels 45° upward
+		# 	align = (:left, :bottom),  # label starts at the point and extends up and to the right
+		# 	offset = (4, 4),
+		# 	fontsize = 11,
+		# 	color=:royalblue
+		# )
+
+	return draw(
+		points; #+ annotations;
+		axis = (;
+			xticks = last_per_restart.restart,
+			# extra room so the rotated labels aren't clipped at the top and right
+			yautolimitmargin = (0.05, 0.2),
+			xautolimitmargin = (0.05, 0.1),
+		),
+		figure = (;
+		 size=(600,600)
+		),
+	)
+end
+
+# ╔═╡ 06249b11-4290-46dd-b1fc-4f36c514dc6f
+#=╠═╡
+plot_quad_order(df_quad)
+  ╠═╡ =#
+
+# ╔═╡ 39880b1a-df8e-46b9-a2dd-45b51e47a2c0
+#=╠═╡
+plot_quad_order(df_quad_stltjs_1)
+  ╠═╡ =#
+
+# ╔═╡ 44c37768-5e30-401e-a7f3-af093676387f
+#=╠═╡
+begin
+	b = ones(n1^2)
+	b = b / norm(b)
+end
+  ╠═╡ =#
+
+# ╔═╡ 9c561c24-d0ef-4113-b704-75613714f371
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+	b = randn(n1^2) * 100
+	b = b / norm(b)
+end
+  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -365,7 +571,7 @@ AlgebraOfGraphics = "~0.13.1"
 BenchmarkTools = "~1.8.0"
 CairoMakie = "~0.15.13"
 DataFrames = "~1.8.2"
-JLD2 = "~0.6.5"
+JLD2 = "~0.6.7"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -374,7 +580,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.12.7"
 manifest_format = "2.0"
-project_hash = "ffe8684cb4dda2bd88ba0f0639f18eadffd6a0ab"
+project_hash = "ff7c1c08e35f33175a04dbd2ab494ff056b98043"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -421,9 +627,9 @@ version = "0.1.45"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra"]
-git-tree-sha1 = "daa72978cd7a624246e894a4f4f067706d4e17e2"
+git-tree-sha1 = "7c2c19b5a26e601634bf718490b89d59685f122e"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-version = "4.7.0"
+version = "4.7.1"
 weakdeps = ["SparseArrays", "StaticArrays"]
 
     [deps.Adapt.extensions]
@@ -558,9 +764,9 @@ weakdeps = ["SparseArrays"]
     ChainRulesCoreSparseArraysExt = "SparseArrays"
 
 [[deps.ChunkCodecCore]]
-git-tree-sha1 = "1a3ad7e16a321667698a19e77362b35a1e94c544"
+git-tree-sha1 = "3496e2b359c27793d12bec54ec94be7983a6ceb2"
 uuid = "0b6fb165-00bc-4d37-ab8b-79f91016dbe1"
-version = "1.0.1"
+version = "1.0.2"
 
 [[deps.ChunkCodecLibZlib]]
 deps = ["ChunkCodecCore", "Zlib_jll"]
@@ -619,9 +825,10 @@ uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.13.1"
 
 [[deps.CommonSolve]]
-git-tree-sha1 = "cf963add2340ad9960e5eb22844e61ad8f931fe1"
+deps = ["PrecompileTools"]
+git-tree-sha1 = "6c389fa857f6ca5a95474b52a52023fd77f24cb7"
 uuid = "38540f10-b2f7-11e9-35d8-d573e4eb0ff2"
-version = "0.2.13"
+version = "0.2.14"
 
 [[deps.Compat]]
 deps = ["TOML", "UUIDs"]
@@ -715,9 +922,9 @@ version = "1.11.0"
 
 [[deps.DelaunayTriangulation]]
 deps = ["AdaptivePredicates", "EnumX", "ExactPredicates", "Random"]
-git-tree-sha1 = "c55f5a9fd67bdbc8e089b5a3111fe4292986a8e8"
+git-tree-sha1 = "4ac548adcad90c1d5d677af13568a748af4c952b"
 uuid = "927a84f5-c5f4-47a5-9785-b46e178433df"
-version = "1.6.6"
+version = "1.6.7"
 
 [[deps.Dictionaries]]
 deps = ["Indexing", "Random", "Serialization"]
@@ -743,9 +950,9 @@ version = "1.11.0"
 
 [[deps.Distributions]]
 deps = ["AliasTables", "FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "Roots", "SpecialFunctions", "Statistics", "StatsAPI", "StatsBase", "StatsFuns"]
-git-tree-sha1 = "d2facc77c08c1c2bfb1a77c148edd05b3db5410b"
+git-tree-sha1 = "a958ab3a40c755563f5e1405c0846cb0446bf19d"
 uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
-version = "0.25.130"
+version = "0.25.131"
 
     [deps.Distributions.extensions]
     DistributionsChainRulesCoreExt = "ChainRulesCore"
@@ -788,9 +995,9 @@ version = "2.2.9"
 
 [[deps.Expat_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "c307cd83373868391f3ac30b41530bc5d5d05d08"
+git-tree-sha1 = "2bfb1e047e2ad0a5ca94365340bde8005d637568"
 uuid = "2e619515-83b5-522b-bb60-26c02a35a201"
-version = "2.8.1+0"
+version = "2.8.4+0"
 
 [[deps.Extents]]
 git-tree-sha1 = "b309b36a9e02fe7be71270dd8c0fd873625332b4"
@@ -971,9 +1178,9 @@ version = "5.2.3+0"
 
 [[deps.Glib_jll]]
 deps = ["Artifacts", "GettextRuntime_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Libiconv_jll", "Libmount_jll", "PCRE2_jll", "Zlib_jll"]
-git-tree-sha1 = "24f6def62397474a297bfcec22384101609142ed"
+git-tree-sha1 = "090526e65de8f69648ac156daae153de8b56df62"
 uuid = "7746bdde-850d-59dc-9ae8-88ece973131d"
-version = "2.86.3+0"
+version = "2.88.3+0"
 
 [[deps.Graphics]]
 deps = ["Colors", "LinearAlgebra", "NaNMath"]
@@ -995,9 +1202,9 @@ version = "0.11.2"
 
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll"]
-git-tree-sha1 = "f923f9a774fcf3f5cb761bfa43aeadd689714813"
+git-tree-sha1 = "9d9531a9cb63a9edc33836414e82a07e81710de2"
 uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
-version = "8.5.1+0"
+version = "100.14004.0+0"
 
 [[deps.HashArrayMappedTries]]
 git-tree-sha1 = "2eaa69a7cab70a52b9687c8bf950a5a93ec895ae"
@@ -1030,9 +1237,9 @@ version = "0.10.5"
 
 [[deps.ImageIO]]
 deps = ["FileIO", "IndirectArrays", "JpegTurbo", "LazyModules", "Netpbm", "OpenEXR", "PNGFiles", "QOI", "Sixel", "TiffImages", "UUIDs", "WebP"]
-git-tree-sha1 = "696144904b76e1ca433b886b4e7edd067d76cbf7"
+git-tree-sha1 = "f0f005f997dfb8c5fe23920d99458a9619873893"
 uuid = "82e4d734-157c-48bb-816b-45c225c6df19"
-version = "0.6.9"
+version = "0.6.10"
 
 [[deps.ImageMetadata]]
 deps = ["AxisArrays", "ImageAxes", "ImageBase", "ImageCore"]
@@ -1062,9 +1269,9 @@ uuid = "d25df0c9-e2be-5dd7-82c8-3ad0b3e990b9"
 version = "0.1.5"
 
 [[deps.InlineStrings]]
-git-tree-sha1 = "8f3d257792a522b4601c24a577954b0a8cd7334d"
+git-tree-sha1 = "06b65886c7577a3784d616e29f1302c2e36e389d"
 uuid = "842dd82b-1e85-43dc-bf29-5d0ee9dffc48"
-version = "1.4.5"
+version = "1.4.6"
 
     [deps.InlineStrings.extensions]
     ArrowTypesExt = "ArrowTypes"
@@ -1100,9 +1307,9 @@ version = "0.16.3"
 
 [[deps.IntervalArithmetic]]
 deps = ["CRlibm", "CoreMath", "MacroTools", "OpenBLASConsistentFPCSR_jll", "Printf", "Random", "RoundingEmulator"]
-git-tree-sha1 = "c3ee408ae340565f41699e3a3fa1053698c7626e"
+git-tree-sha1 = "ff294afb9a15d31d8d7422da138844641a73135f"
 uuid = "d1acc4aa-44c8-5952-acd4-ba5d80a2a253"
-version = "1.0.10"
+version = "1.0.11"
 
     [deps.IntervalArithmetic.extensions]
     IntervalArithmeticArblibExt = "Arblib"
@@ -1179,10 +1386,10 @@ uuid = "82899510-4779-5014-852e-03e436cf321d"
 version = "1.0.0"
 
 [[deps.JLD2]]
-deps = ["ChunkCodecLibZlib", "ChunkCodecLibZstd", "FileIO", "MacroTools", "Mmap", "OrderedCollections", "PrecompileTools", "ScopedValues"]
-git-tree-sha1 = "9ebadf3f8f0de07031359917549bbdadc23f5dc3"
+deps = ["ChunkCodecCore", "ChunkCodecLibZlib", "ChunkCodecLibZstd", "FileIO", "MacroTools", "Mmap", "OrderedCollections", "PrecompileTools", "ScopedValues"]
+git-tree-sha1 = "9ce2e7c49ae4a7035b7d60db3a553b1f6c16875d"
 uuid = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
-version = "0.6.5"
+version = "0.6.7"
 
     [deps.JLD2.extensions]
     UnPackExt = "UnPack"
@@ -1198,9 +1405,9 @@ version = "1.8.0"
 
 [[deps.JSON]]
 deps = ["Dates", "Logging", "Parsers", "PrecompileTools", "StructUtils", "UUIDs", "Unicode"]
-git-tree-sha1 = "c89d196f5ffb64bfbf80985b699ea913b0d2c211"
+git-tree-sha1 = "633b5a34494e711f694ccbc88a6e00102f10238c"
 uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
-version = "1.6.1"
+version = "1.9.0"
 
     [deps.JSON.extensions]
     JSONArrowExt = ["ArrowTypes"]
@@ -1216,9 +1423,9 @@ version = "0.1.6"
 
 [[deps.JpegTurbo_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "c0c9b76f3520863909825cbecdef58cd63de705a"
+git-tree-sha1 = "037babc10853eeb8e585418922246cb97b8e5b74"
 uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
-version = "3.1.5+0"
+version = "3.2.0+1"
 
 [[deps.JuliaSyntaxHighlighting]]
 deps = ["StyledStrings"]
@@ -1239,20 +1446,20 @@ version = "3.100.3+0"
 
 [[deps.LERC_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "17b94ecafcfa45e8360a4fc9ca6b583b049e4e37"
+git-tree-sha1 = "39bca05343661c347aae0bca57a5994a0bf4f08d"
 uuid = "88015f11-f218-50d7-93a8-a6af411a945d"
-version = "4.1.0+0"
+version = "4.2.0+0"
 
 [[deps.LLVMOpenMP_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "eb62a3deb62fc6d8822c0c4bef73e4412419c5d8"
+git-tree-sha1 = "e5b100780d4d30d63b4618d7930d48af409c1772"
 uuid = "1d63c593-3942-5779-bab2-d838dc0a180e"
-version = "18.1.8+0"
+version = "23.1.1+0"
 
 [[deps.LaTeXStrings]]
-git-tree-sha1 = "dda21b8cbd6a6c40d9d02a73230f9d70fed6918c"
+git-tree-sha1 = "f88f3ccef05a6a72a0cf0ed417c8fd68530f4ab2"
 uuid = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
-version = "1.4.0"
+version = "1.4.1"
 
 [[deps.LazyModules]]
 git-tree-sha1 = "a560dd966b386ac9ae60bdd3a3d3a326062d3c3e"
@@ -1314,9 +1521,9 @@ version = "2.42.0+0"
 
 [[deps.Libtiff_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "LERC_jll", "Libdl", "XZ_jll", "Zlib_jll", "Zstd_jll"]
-git-tree-sha1 = "f04133fe05eff1667d2054c53d59f9122383fe05"
+git-tree-sha1 = "aebd334d06cee9f24cea70bd19a39749daf73881"
 uuid = "89763e89-9b03-5906-acba-b20f662cd828"
-version = "4.7.2+0"
+version = "4.7.3+0"
 
 [[deps.Libuuid_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -1410,9 +1617,9 @@ version = "2025.11.4"
 
 [[deps.MuladdMacro]]
 deps = ["PrecompileTools"]
-git-tree-sha1 = "e8dcbeef032ba2f9051a44ac22b4e54e3a1a0099"
+git-tree-sha1 = "283bf85d4a767481dd924dff0eee1735e95f449e"
 uuid = "46d2c3a1-f734-5fdb-9937-b9b9aeba4221"
-version = "0.2.6"
+version = "0.2.7"
 
 [[deps.NaNMath]]
 deps = ["OpenLibm_jll"]
@@ -1474,9 +1681,9 @@ version = "0.3.3"
 
 [[deps.OpenEXR_jll]]
 deps = ["Artifacts", "Imath_jll", "JLLWrappers", "Libdl", "Zlib_jll"]
-git-tree-sha1 = "0d621a4beb5e48d195f907c3c5b0bea285d9ff9d"
+git-tree-sha1 = "1bcebd887dd33f1108210b3954049b1bb8af0e7a"
 uuid = "18a262bb-aa17-5467-a713-aee519bc75cb"
-version = "3.4.13+0"
+version = "3.4.15+0"
 
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1540,15 +1747,15 @@ version = "0.5.12"
 
 [[deps.Pango_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "FriBidi_jll", "Glib_jll", "HarfBuzz_jll", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "58e5ed5e386e156bd93e86b305ebd21ac63d2d04"
+git-tree-sha1 = "1912a9f1b9ca55005b03ba075f8e19993583e237"
 uuid = "36c8627f-9965-5494-a995-c6b170f724f3"
-version = "1.57.1+0"
+version = "1.58.2+0"
 
 [[deps.Parsers]]
-deps = ["Dates", "PrecompileTools", "UUIDs"]
-git-tree-sha1 = "32a4e09c5f29402573d673901778a0e03b0807b9"
+deps = ["Dates", "PrecompileTools"]
+git-tree-sha1 = "663e8b48b789916221e0765393b289ca6c88f24e"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.8.6"
+version = "3.0.0"
 
 [[deps.Pixman_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "LLVMOpenMP_jll", "Libdl"]
@@ -1572,10 +1779,10 @@ uuid = "eebad327-c553-4316-9ea0-9fa01ccd7688"
 version = "0.3.3"
 
 [[deps.PlotUtils]]
-deps = ["ColorSchemes", "Colors", "Dates", "PrecompileTools", "Printf", "Random", "Reexport", "StableRNGs", "Statistics"]
-git-tree-sha1 = "26ca162858917496748aad52bb5d3be4d26a228a"
+deps = ["ColorSchemes", "Colors", "Dates", "PrecompileTools", "Printf", "Reexport", "Statistics"]
+git-tree-sha1 = "f20e945b895d2009c6c28d8bbf40a5cd846f7c2f"
 uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
-version = "1.4.4"
+version = "1.5.0"
 
 [[deps.PolygonOps]]
 git-tree-sha1 = "77b3d3605fc1cd0b42d95eba87dfcd2bf67d5ff6"
@@ -1602,9 +1809,9 @@ version = "1.6.0"
 
 [[deps.PrettyTables]]
 deps = ["Crayons", "LaTeXStrings", "Markdown", "PrecompileTools", "Printf", "REPL", "Reexport", "StringManipulation", "Tables"]
-git-tree-sha1 = "ca9385c2f2c93a9491c6c53d31e9c237fe21b232"
+git-tree-sha1 = "1b8aa19f229b1cea7fc93874a52e49db6a854450"
 uuid = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
-version = "3.4.5"
+version = "3.4.8"
 
     [deps.PrettyTables.extensions]
     PrettyTablesExcelExt = "XLSX"
@@ -1715,9 +1922,9 @@ version = "0.5.2+0"
 
 [[deps.Roots]]
 deps = ["Accessors", "CommonSolve", "Printf"]
-git-tree-sha1 = "7fb25a964849d90a0446366cdefca822e0e84900"
+git-tree-sha1 = "4db094d5e079abbda658acfe1c4d098430417717"
 uuid = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
-version = "3.0.6"
+version = "3.0.8"
 
     [deps.Roots.extensions]
     RootsChainRulesCoreExt = "ChainRulesCore"
@@ -1831,12 +2038,6 @@ weakdeps = ["ChainRulesCore"]
     [deps.SpecialFunctions.extensions]
     SpecialFunctionsChainRulesCoreExt = "ChainRulesCore"
 
-[[deps.StableRNGs]]
-deps = ["Random"]
-git-tree-sha1 = "4f96c596b8c8258cc7d3b19797854d368f243ddc"
-uuid = "860ef19b-820b-49d6-a774-d7a799459cd3"
-version = "1.0.4"
-
 [[deps.StackViews]]
 deps = ["OffsetArrays"]
 git-tree-sha1 = "be1cf4eb0ac528d96f5115b4ed80c26a8d8ae621"
@@ -1861,9 +2062,9 @@ version = "1.4.4"
 
 [[deps.Statistics]]
 deps = ["LinearAlgebra"]
-git-tree-sha1 = "ae3bb1eb3bba077cd276bc5cfc337cc65c3075c0"
+git-tree-sha1 = "e2b53ce13a53367e96601081e33d34746b571bad"
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
-version = "1.11.1"
+version = "1.11.5"
 weakdeps = ["SparseArrays"]
 
     [deps.Statistics.extensions]
@@ -1877,9 +2078,9 @@ version = "1.8.0"
 
 [[deps.StatsBase]]
 deps = ["AliasTables", "DataAPI", "DataStructures", "IrrationalConstants", "LinearAlgebra", "LogExpFunctions", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics", "StatsAPI"]
-git-tree-sha1 = "e4d7a1a0edc20af42689ea6f4f3587a2175d50ee"
+git-tree-sha1 = "adb9da019510162e67a4493fc235c23203d8b09e"
 uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
-version = "0.34.12"
+version = "0.34.13"
 
 [[deps.StatsFuns]]
 deps = ["HypergeometricFunctions", "IrrationalConstants", "LogExpFunctions", "Reexport", "Rmath", "SpecialFunctions"]
@@ -1900,9 +2101,9 @@ version = "0.7.10"
 
 [[deps.StringManipulation]]
 deps = ["PrecompileTools"]
-git-tree-sha1 = "8a90c1d77c3277a5d43b83927b3cbe2c70a37484"
+git-tree-sha1 = "773065c6e0e903924a9d838259be74338422aef2"
 uuid = "892a3eda-7b42-436c-8928-eab12a02cf0e"
-version = "0.4.7"
+version = "0.5.0"
 
 [[deps.StructArrays]]
 deps = ["ConstructionBase", "DataAPI", "Tables"]
@@ -1927,16 +2128,18 @@ version = "0.7.3"
 
 [[deps.StructUtils]]
 deps = ["Dates", "UUIDs"]
-git-tree-sha1 = "82bee338d650aa515f31866c460cb7e3bcef90b8"
+git-tree-sha1 = "b814d5005d6a529d740ffe06f8a86396f6501138"
 uuid = "ec057cc2-7a8d-4b58-b3b3-92acb9f63b42"
-version = "2.8.2"
+version = "2.9.2"
 
     [deps.StructUtils.extensions]
+    StructUtilsLazilyInitializedFieldsExt = ["LazilyInitializedFields"]
     StructUtilsMeasurementsExt = ["Measurements"]
     StructUtilsStaticArraysCoreExt = ["StaticArraysCore"]
     StructUtilsTablesExt = ["Tables"]
 
     [deps.StructUtils.weakdeps]
+    LazilyInitializedFields = "0e77f7df-68c5-4e49-93ce-4cd80f5598bf"
     Measurements = "eff96d63-e80a-5855-80a2-b1b0885c5ab7"
     StaticArraysCore = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
     Tables = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
@@ -1967,9 +2170,9 @@ version = "1.0.1"
 
 [[deps.Tables]]
 deps = ["DataAPI", "DataValueInterfaces", "IteratorInterfaceExtensions", "OrderedCollections", "TableTraits"]
-git-tree-sha1 = "0f38a06c83f0007bbab3cf911262841c9a0f07e0"
+git-tree-sha1 = "a94d9bdda1b7bed0046cea645639ab3f62196fac"
 uuid = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
-version = "1.13.0"
+version = "1.14.0"
 
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
@@ -2050,9 +2253,9 @@ version = "1.1.0"
 
 [[deps.XZ_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "b29c22e245d092b8b4e8d3c09ad7baa586d9f573"
+git-tree-sha1 = "e52eca002a11c30a858185efdfb15311e1c7a6bf"
 uuid = "ffd25f8a-64ca-5728-b0f7-c24cf3aae800"
-version = "5.8.3+0"
+version = "5.8.4+0"
 
 [[deps.Xorg_libX11_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libxcb_jll", "Xorg_xtrans_jll"]
@@ -2127,15 +2330,15 @@ version = "0.2.3+0"
 
 [[deps.libaom_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "850b06095ee71f0135d644ffd8a52850699581ed"
+git-tree-sha1 = "ef17c47d22224aaecc76e597ab21a072e025cf7b"
 uuid = "a4ae2306-e953-59d6-aa16-d00cac43593b"
-version = "3.13.3+0"
+version = "3.14.1+0"
 
 [[deps.libass_jll]]
 deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "HarfBuzz_jll", "JLLWrappers", "Libdl", "Zlib_jll"]
-git-tree-sha1 = "125eedcb0a4a0bba65b657251ce1d27c8714e9d6"
+git-tree-sha1 = "cb007192783c56d8249db4cf0e3495001edfe414"
 uuid = "0ac62f75-1d6f-5e53-bd7c-93b484bb37c0"
-version = "0.17.4+0"
+version = "0.17.5+0"
 
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -2222,9 +2425,9 @@ version = "4.1.0+0"
 # ╠═5aaf7260-b247-401b-b66b-002f0dbe4a03
 # ╠═d0fcd886-9350-4904-928f-de9e82a1acff
 # ╠═bf50905d-726d-43a6-95e6-150669953fb0
-# ╠═0517f10c-8a8e-4854-bf5d-a3c9606be76b
 # ╠═b7c4f09a-db5f-4467-9447-9895eef48083
 # ╠═389353ac-a5db-4c66-b430-57ca5cc93ab0
+# ╠═fa13dd3f-0130-4138-9399-dc36fc4a538f
 # ╟─32219cbe-c3d8-43ba-b679-6c0a69ce5a04
 # ╠═436cd93d-c9a5-4ed6-a496-f0476cdb07ef
 # ╠═c947cf07-f771-4967-9878-5dda0c1af841
@@ -2235,20 +2438,16 @@ version = "4.1.0+0"
 # ╠═cbb5cba4-9429-480d-9972-49c11549eaf9
 # ╠═3596ff4c-9ec7-45c1-8b8d-5402ed599d88
 # ╠═442fffdc-0fe7-46a8-abeb-021ae9abc0e0
-# ╠═6836225e-dd1c-4523-b02b-98de21b1fcfb
 # ╠═ac33e289-9d15-4bcc-88a8-d9621c394636
 # ╠═46ad7c94-ef59-4080-9f7d-9a6116e4a7be
 # ╠═06457149-bada-4ba7-97d3-e38b50763351
 # ╠═f0efc690-7974-40b4-89a0-e5b94f47f044
 # ╠═bf16c9e0-c528-4908-b8dd-3c06f10f7b3f
-# ╠═fcc931e6-0fda-4afb-a5fa-1bc36915498d
-# ╠═70b959c3-e6e2-4d1f-aea5-94af92a1b4bb
 # ╠═0098f654-391a-4f90-90db-37e30bc94fe7
 # ╠═17ceb2d2-0192-4ecd-9adf-697d9ba698fa
 # ╠═d84fa034-2d55-4640-bbbe-b121bc1867fb
 # ╠═51b0ffb4-5dd1-493a-a16a-0df3641ced46
 # ╠═6865682e-3019-4528-ae84-a9f91aa1cafa
-# ╠═e4760f5c-672c-439c-a898-5404bd5e673e
 # ╠═98802a63-a6cb-4e9c-8900-d608b31ffd02
 # ╠═86db8b9a-2670-4530-94a7-f1e8f0e2eaf8
 # ╠═393eb5e4-ea4f-4b07-9780-a1e8d14be905
@@ -2259,9 +2458,20 @@ version = "4.1.0+0"
 # ╠═d2698ab2-768c-4e4a-bfb2-ce587e7266db
 # ╠═27eac18c-cbc6-4414-82cb-50dbce71533c
 # ╠═ded25da0-34c6-4db6-a084-beaa93f1f942
+# ╠═d5680e70-446a-48a2-bb0d-6f93489df990
 # ╠═d0bb30d6-d874-4ce2-9bbc-a7f634293e1e
 # ╠═7252e3a5-962b-4cc9-b9a6-851556be835e
+# ╠═b02842d4-3c0e-44b0-8652-df1d1fdff99b
+# ╠═9cd13a79-cdbf-4faf-a081-27799b39650e
 # ╠═956a375a-3565-4882-8619-7ccb49ad7b99
 # ╠═46ef47d1-6865-489c-915b-f1852633f995
+# ╠═d7f65819-8bbc-4f5e-be0f-e4077903ec40
+# ╠═bc14ae65-5e28-4d79-ac89-5b5124cd6a6d
+# ╠═7bc3c320-a869-4d15-b4fa-595f80951c6e
+# ╠═760c8207-23a1-4218-86c5-b4f563d8a5df
+# ╠═0d4d8d06-8b19-4220-b8bb-a66913e00baf
+# ╠═414742d2-3ea3-4d98-aa18-a75b78284982
+# ╠═06249b11-4290-46dd-b1fc-4f36c514dc6f
+# ╠═39880b1a-df8e-46b9-a2dd-45b51e47a2c0
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
