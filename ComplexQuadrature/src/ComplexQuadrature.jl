@@ -223,22 +223,37 @@ Contour for use when integrating Stieljes functions. Always [-∞,0].
 """
 struct StieltjesContour{T <: Real} <: AbstractStieltjesContour
     cov::ChangeOfVariables
-    StieltjesContour{T}() where {T <: Real} = new{T}(
-        ChangeOfVariables(
-            x -> -(1 + x) / (1 - x),
-            x -> 2 / (1 - x)^2
-        )
-    )
+    limits::Tuple{T, T}
 end
 
-StieltjesContour() = StieltjesContour{Float64}()
+function StieltjesContour{T}(limits::Tuple{<:Real, <:Real}) where {T <: Real}
+    a, b = limits
+    cov = if isinf(a) && a < 0
+        ChangeOfVariables(
+            x -> T(b) - (one(T) + x) / (one(T) - x),
+            x -> 2 / (one(T) - x)^2
+        )
+    elseif isfinite(a) && isfinite(b)
+        ChangeOfVariables(
+            x -> (T(b) - T(a)) * (x + one(T)) / 2 + T(a),
+            x -> (T(b) - T(a)) / 2
+        )
+    else
+        throw(ArgumentError("Stieltjes limits must be finite or have a finite lower endpoint"))
+    end
+    return StieltjesContour{T}(cov, (T(a), T(b)))
+end
+
+StieltjesContour() = StieltjesContour{Float64}((-Inf, 0))
+StieltjesContour(limits::Tuple{<:Real, <:Real}) =
+    StieltjesContour{promote_type(typeof(first(limits)), typeof(last(limits)))}(limits)
 
 build(::Type{StieltjesContour}) = StieltjesContour()
-
+build(::Type{StieltjesContour}, limits::Tuple{<:Real, <:Real}) = StieltjesContour(limits)
 build(::Type{StieltjesContour}, λs, contour_buffer) = StieltjesContour()
 
 """
-Negative-axis contour using t = -u², with u = (1+x)/(1-x).
+Stieltjes contour using t = -u^2, with u = (1+x)/(1-x).
 
 For the inverse square root, this substitution cancels the
 endpoint singularity from inner(t) = 1 / sqrt(-t).
@@ -247,20 +262,28 @@ The Jacobian is its positive magnitude, for integration over (-∞, 0].
 """
 struct SquaredStieltjesContour{T <: Real} <: AbstractStieltjesContour
     cov::ChangeOfVariables
+    limits::Tuple{T, T}
 
-    function SquaredStieltjesContour{T}() where {T <: Real}
+    function SquaredStieltjesContour{T}(limits::Tuple{<:Real, <:Real}) where {T <: Real}
+        a, b = limits
+        if !(isinf(a) && a < 0)
+            throw(ArgumentError("SquaredStieltjesContour requires a lower limit of -Inf"))
+        end
         cov = ChangeOfVariables(
-            x -> -((one(T) + x) / (one(T) - x))^2,
+            x -> T(b) - ((one(T) + x) / (one(T) - x))^2,
             x -> 4 * (one(T) + x) / (one(T) - x)^3,
         )
-        return new{T}(cov)
+        return new{T}(cov, (T(a), T(b)))
     end
 end
 
-SquaredStieltjesContour() = SquaredStieltjesContour{Float64}()
+SquaredStieltjesContour() = SquaredStieltjesContour{Float64}((-Inf, 0))
+SquaredStieltjesContour(limits::Tuple{<:Real, <:Real}) =
+    SquaredStieltjesContour{promote_type(typeof(first(limits)), typeof(last(limits)))}(limits)
 
 build(::Type{SquaredStieltjesContour}) = SquaredStieltjesContour()
-
+build(::Type{SquaredStieltjesContour}, limits::Tuple{<:Real, <:Real}) =
+    SquaredStieltjesContour(limits)
 build(::Type{SquaredStieltjesContour}, λs, contour_buffer) = SquaredStieltjesContour()
 
 

@@ -23,7 +23,7 @@ include("./stieltjes.jl")
 include("./krylov_approximation.jl")
 
 export RationalApproximation, bestapprox_expm_data
-export StieltjesFunction, inverse_pth_root
+export StieltjesFunction, inverse_pth_root, log1p_over_z
 export arnoldi, lanczos
 export StopCode, Trace, TraceType, krylov_approx
 export krylov_approx_quad, krylov_approx_quad2, message

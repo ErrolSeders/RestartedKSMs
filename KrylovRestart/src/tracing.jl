@@ -7,8 +7,6 @@
     QuadratureSolver
     QuadratureSolverSieltjes
     FrommerStieltjes
-    ChenImplicit
-    ChenExplicit
 end
 
 mutable struct Trace

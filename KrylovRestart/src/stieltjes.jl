@@ -12,7 +12,11 @@ struct StieltjesFunction
     outer::Union{Nothing, Function}
     inner::Function
     constant
+    limits::Tuple{<:Real, <:Real}
 end
+
+StieltjesFunction(outer, inner, constant) =
+    StieltjesFunction(outer, inner, constant, (-Inf, 0))
 
 """
     (f::StieltjesFunction)(z; reltol = nothing, abstol = nothing)
@@ -22,7 +26,7 @@ Evaluate the Stieltjes function for a value `z` that is not on the negative real
 (f::StieltjesFunction)(z; reltol = nothing, abstol = nothing) = isnothing(
         f.outer
     ) ? begin
-        Γ = [-Inf, 0]
+        Γ = f.limits
         g = (t, p) -> (f.inner(t) / (t - z))
         prob = IntegralProblem(g, Γ)
 
@@ -41,7 +45,7 @@ Evaluate the Stieltjes function for a matrix `A` with no eigenvalues on the nega
 (f::StieltjesFunction)(A::AbstractArray; reltol = nothing, abstol = nothing) = isnothing(
         f.outer
     ) ? begin
-        Γ = [-Inf, 0]
+        Γ = f.limits
         g = (t, p) -> f.inner(t) * inv(t * I - A)
         prob = IntegralProblem(g, Γ)
 
@@ -55,5 +59,19 @@ Evaluate the Stieltjes function for a matrix `A` with no eigenvalues on the nega
 inverse_pth_root(p) = StieltjesFunction(
     (A) -> (inv(A^(1 / p))),
     (t) -> (inv((-t)^(1 / p))),
-    sin((1 / p - 1) * π) / π
+    sin((1 / p - 1) * π) / π,
+    (-Inf, 0)
+)
+
+"""
+    log1p_over_z()
+
+The Stieltjes representation of `log(1 + z) / z`:
+`∫₋∞⁻¹ (1/t) / (t - z) dt`.
+"""
+log1p_over_z() = StieltjesFunction(
+    nothing,
+    t -> inv(t),
+    1,
+    (-Inf, -1)
 )

@@ -59,16 +59,28 @@ heatmap_res(res) = heatmap(reshape(res,n1,n1))
 # ╔═╡ 6fb1d88c-c952-451f-840d-70f58568bacd
 invsqrt = inv ∘ sqrt
 
-# ╔═╡ dd001e73-1af2-42e1-b86f-5bc406bd6d10
+# ╔═╡ 44c37768-5e30-401e-a7f3-af093676387f
+begin
+	b = ones(n1^2)
+	b = b / norm(b)
+end
+
+# ╔═╡ 9c561c24-d0ef-4113-b704-75613714f371
+# ╠═╡ disabled = true
 #=╠═╡
-heatmap_res(b)
+begin
+	b = randn(n1^2) * 100
+	b = b / norm(b)
+end
   ╠═╡ =#
+
+# ╔═╡ dd001e73-1af2-42e1-b86f-5bc406bd6d10
+heatmap_res(b)
 
 # ╔═╡ ed634488-2e06-4a59-8ec7-a2fce4d7da15
 #Cond Lh with n1 = 100 ≈ 4080.4 :(
 
 # ╔═╡ bf2b5f42-6316-490b-b909-ef9a333ba4ea
-#=╠═╡
 begin
 	μ, Q = eigen(T)
 	Μ = diagm(μ) |> sparse
@@ -77,33 +89,24 @@ begin
 	U = spdiagm(invsqrt.(diag(Μ ⊗ Id + Id ⊗ Μ)))
 	reference = h * Qkron * U * Qkronb
 end
-  ╠═╡ =#
 
 # ╔═╡ 5aaf7260-b247-401b-b66b-002f0dbe4a03
-#=╠═╡
 heatmap_res(reference)
-  ╠═╡ =#
 
 # ╔═╡ d0fcd886-9350-4904-928f-de9e82a1acff
 m = 50
 
 # ╔═╡ bf50905d-726d-43a6-95e6-150669953fb0
-#=╠═╡
 trace_original = Trace(); res = krylov_approx(invsqrt,Lh,b,m,trace=trace_original,tol=1e-13,max_restarts=60,exact=reference)
-  ╠═╡ =#
 
 # ╔═╡ b7c4f09a-db5f-4467-9447-9895eef48083
-#=╠═╡
 trace_original
-  ╠═╡ =#
 
 # ╔═╡ 389353ac-a5db-4c66-b430-57ca5cc93ab0
-#=╠═╡
 norm(reference - res) / norm(reference)
-  ╠═╡ =#
 
 # ╔═╡ fa13dd3f-0130-4138-9399-dc36fc4a538f
-
+trace_original.metrics[:up_bnd] |> minimum
 
 # ╔═╡ 32219cbe-c3d8-43ba-b679-6c0a69ce5a04
 md"""
@@ -111,131 +114,98 @@ This is the absolute & relative error of the approximation after a single restar
 """
 
 # ╔═╡ 436cd93d-c9a5-4ed6-a496-f0476cdb07ef
-#=╠═╡
 begin 
 	(V,H,η,qm) = lanczos(Lh,b,m)
 	first_restart = V * invsqrt(H)[1,:]
 	norm(reference - first_restart), norm(reference - first_restart) / norm(reference)
 end
-  ╠═╡ =#
 
 # ╔═╡ c947cf07-f771-4967-9878-5dda0c1af841
-#=╠═╡
 eigen(H)
-  ╠═╡ =#
 
 # ╔═╡ ba63609d-543d-429f-9562-c125c9d9a672
-#=╠═╡
 first_restart
-  ╠═╡ =#
 
 # ╔═╡ f2568672-c417-45f6-b386-380289e706e6
-#=╠═╡
 trace_quad = Trace(); res2 = krylov_approx_quad(invsqrt,Lh,b,m,trace=trace_quad,max_restarts=60,contour_type=PacmanContour,quad_tol=1e-13,stop_tol=1e-13,exact=reference,contour_safety=1.1)
-  ╠═╡ =#
 
 # ╔═╡ 9f193c2e-48d2-4acd-a569-f1b37f7dbd13
-#=╠═╡
 trace_quad
-  ╠═╡ =#
 
 # ╔═╡ 567073e3-c61f-47b5-ade8-e2b12afc23fd
-#=╠═╡
 trace_quad.metrics[:update_norm]
-  ╠═╡ =#
 
 # ╔═╡ cbb5cba4-9429-480d-9972-49c11549eaf9
-#=╠═╡
 trace_quad.metrics[:abs_err]
-  ╠═╡ =#
+
+# ╔═╡ 8e395c6f-0460-4d97-a88c-f8676ec2778f
+trace_quad.metrics[:quad2_order]
 
 # ╔═╡ 3596ff4c-9ec7-45c1-8b8d-5402ed599d88
-#=╠═╡
-norm(reference - (res2 .|> real)) / norm(reference)
-  ╠═╡ =#
+norm(reference - res2) / norm(reference)
+
+# ╔═╡ 3f4d8154-eb6b-4213-80bf-ae0b0b67f66f
+norm(reference - res2)
 
 # ╔═╡ 442fffdc-0fe7-46a8-abeb-021ae9abc0e0
-#=╠═╡
 trace_quad2 = Trace(); res3 = krylov_approx_quad2(invsqrt, Lh, b, m, trace=trace_quad2,max_restarts=60,exact=reference,contour_type=PacmanContour,quad_tol=1e-16,stop_tol=1e-13,contour_safety=1.1)
-  ╠═╡ =#
 
 # ╔═╡ ac33e289-9d15-4bcc-88a8-d9621c394636
-#=╠═╡
 norm(reference - res3) / norm(reference)
-  ╠═╡ =#
 
 # ╔═╡ 46ad7c94-ef59-4080-9f7d-9a6116e4a7be
-#=╠═╡
 trace_quad2
-  ╠═╡ =#
 
 # ╔═╡ 06457149-bada-4ba7-97d3-e38b50763351
-#=╠═╡
 trace_quad2.metrics[:update_norm]
-  ╠═╡ =#
 
 # ╔═╡ f0efc690-7974-40b4-89a0-e5b94f47f044
 invsqrt_stjes = inverse_pth_root(2)
 
 # ╔═╡ bf16c9e0-c528-4908-b8dd-3c06f10f7b3f
-#=╠═╡
 trace_stieltjes_1 = Trace(); res4 = krylov_approx_quad(invsqrt_stjes,Lh,b,m,quad_tol=1e-13,stop_tol=1e-13,trace=trace_stieltjes_1,exact=reference,contour_type=SquaredStieltjesContour)
-  ╠═╡ =#
 
 # ╔═╡ 0098f654-391a-4f90-90db-37e30bc94fe7
-#=╠═╡
 norm(reference - res4) / norm(reference)
-  ╠═╡ =#
+
+# ╔═╡ 21e1a276-9ef1-41d0-a1c7-8814f1767263
+norm(reference - res4)
 
 # ╔═╡ 17ceb2d2-0192-4ecd-9adf-697d9ba698fa
-#=╠═╡
 trace_stieltjes_1
-  ╠═╡ =#
 
 # ╔═╡ d84fa034-2d55-4640-bbbe-b121bc1867fb
-#=╠═╡
-trace_stieltjes_1.metrics[:quad1_order]
-  ╠═╡ =#
+trace_stieltjes_1.metrics[:quad2_order]
 
 # ╔═╡ 51b0ffb4-5dd1-493a-a16a-0df3641ced46
-#=╠═╡
 trace_stieltjes_1.metrics[:quad_err]
-  ╠═╡ =#
 
 # ╔═╡ 6865682e-3019-4528-ae84-a9f91aa1cafa
-#=╠═╡
 trace_stieltjes_2 = Trace(); res5 = krylov_approx_quad2(invsqrt_stjes, Lh, b, m, trace=trace_stieltjes_2,exact=reference,stop_tol=1e-13)
-  ╠═╡ =#
 
 # ╔═╡ 98802a63-a6cb-4e9c-8900-d608b31ffd02
-#=╠═╡
 norm(reference - res5) / norm(reference)
-  ╠═╡ =#
 
 # ╔═╡ 86db8b9a-2670-4530-94a7-f1e8f0e2eaf8
-#=╠═╡
 trace_stieltjes_2
-  ╠═╡ =#
 
 # ╔═╡ 393eb5e4-ea4f-4b07-9780-a1e8d14be905
-#=╠═╡
 trace_stieltjes_3 = Trace(); res_stieltjes_3 = krylov_approx_stieltjes(invsqrt_stjes,Lh,b,m,trace=trace_stieltjes_3,order=60,exact=reference,tol=1e-13)
-  ╠═╡ =#
 
 # ╔═╡ 5b5c7ed8-8ac6-4bc1-848f-e0c26a938d0e
-#=╠═╡
 trace_stieltjes_3
-  ╠═╡ =#
+
+# ╔═╡ faba6767-b094-4f63-9499-9bf37f4964fc
+trace_stieltjes_3.metrics[:up_bnd] |> minimum
 
 # ╔═╡ 215dbca6-f1ac-4c63-b259-b89413156ee4
-#=╠═╡
 norm(reference - res_stieltjes_3) / norm(reference)
-  ╠═╡ =#
+
+# ╔═╡ 8fdf8114-9c94-4894-8d2b-37adb926f9c5
+norm(reference - res_stieltjes_3)
 
 # ╔═╡ 9889e59e-2a58-4974-85ac-c38dd43dcb75
-#=╠═╡
 heatmap_res(res_stieltjes_3)
-  ╠═╡ =#
 
 # ╔═╡ d2698ab2-768c-4e4a-bfb2-ce587e7266db
 begin
@@ -258,12 +228,9 @@ begin
 end
 
 # ╔═╡ 27eac18c-cbc6-4414-82cb-50dbce71533c
-#=╠═╡
 df = traces_to_dataframe([trace_original, trace_quad, trace_quad2, trace_stieltjes_1, trace_stieltjes_2,trace_stieltjes_3],["RKSM-EE", "RKSM-FGS", "RKSM-FGS-QuadGK","RKSM-FGS-Stieltjes","RKSM-FGS-Stieltjes-QuadGK", "RKSM-FS"])
-  ╠═╡ =#
 
 # ╔═╡ ded25da0-34c6-4db6-a084-beaa93f1f942
-#=╠═╡
 begin
 	p = data(df) *
     mapping(:restart => "Restart Cycle", :abs_err => "Absolute Error", color=:algorithm => "Algorithm") *
@@ -288,15 +255,11 @@ begin
 		 )
 		)	
 end
-  ╠═╡ =#
 
 # ╔═╡ d5680e70-446a-48a2-bb0d-6f93489df990
-#=╠═╡
 save("plots/m$(m)_n$(n1)_InvSqrt_abserr.png",plot)
-  ╠═╡ =#
 
 # ╔═╡ d0bb30d6-d874-4ce2-9bbc-a7f634293e1e
-#=╠═╡
 df_stltjs_3 = DataFrame(
 	restart = 2:trace_stieltjes_3.restarts,
 	abs_err = trace_stieltjes_3.metrics[:abs_err],
@@ -304,10 +267,8 @@ df_stltjs_3 = DataFrame(
 	low_bnd = trace_stieltjes_3.metrics[:low_bnd],
 	delta_bnd = trace_stieltjes_3.metrics[:delta_bnd]
 )
-  ╠═╡ =#
 
 # ╔═╡ 7252e3a5-962b-4cc9-b9a6-851556be835e
-#=╠═╡
 begin 
 	dat = data(df_stltjs_3)
 
@@ -340,25 +301,19 @@ p4 = p1 + p2 + p3
 		 )
 		)	
 end
-  ╠═╡ =#
 
 # ╔═╡ b02842d4-3c0e-44b0-8652-df1d1fdff99b
-#=╠═╡
 save("plots/m$(m)_n$(n1)_RKSMFS_errbnds.png", plot2)
-  ╠═╡ =#
 
 # ╔═╡ 956a375a-3565-4882-8619-7ccb49ad7b99
-#=╠═╡
 df_original = DataFrame(
 	restart = 1:trace_original.restarts,
 	abs_err = trace_original.metrics[:abs_err],
 	up_bnd = trace_original.metrics[:up_bnd],
 	low_bnd = trace_original.metrics[:low_bnd]
 )
-  ╠═╡ =#
 
 # ╔═╡ 9cd13a79-cdbf-4faf-a081-27799b39650e
-#=╠═╡
 begin
 plt_delta = data(df_stltjs_3) * mapping(:restart => "Restart Cycle", (:abs_err, :low_bnd) => (abs ∘ -) => "Low Bound and Absolute Error Difference") *
     (visual(Lines) + visual(Scatter, marker=:+)) * 	visual(color=:cornflowerblue, label="FKSM-FS Bound Error Difference")
@@ -383,10 +338,8 @@ draw(plt_delta + plt_delta2,
 		 )
 		)
 end
-  ╠═╡ =#
 
 # ╔═╡ 46ef47d1-6865-489c-915b-f1852633f995
-#=╠═╡
 begin 
 	dat2 = data(df_original)
 
@@ -419,12 +372,9 @@ p8 = p5 + p6 + p7
 		 )
 		)	
 end
-  ╠═╡ =#
 
 # ╔═╡ d7f65819-8bbc-4f5e-be0f-e4077903ec40
-#=╠═╡
 save("plots/m$(m)_n$(n1)_RKSMEE_errbnds.png", plot3)
-  ╠═╡ =#
 
 # ╔═╡ bc14ae65-5e28-4d79-ac89-5b5124cd6a6d
 function quad_method_trace_to_dataframe(trace,algorithm) 
@@ -442,14 +392,10 @@ function quad_method_trace_to_dataframe(trace,algorithm)
 end	
 
 # ╔═╡ 7bc3c320-a869-4d15-b4fa-595f80951c6e
-#=╠═╡
 df_quad_stltjs_1 = quad_method_trace_to_dataframe(trace_stieltjes_1,"RKSM-FGS-Stieltjes")
-  ╠═╡ =#
 
 # ╔═╡ 760c8207-23a1-4218-86c5-b4f563d8a5df
-#=╠═╡
 df_quad = quad_method_trace_to_dataframe(trace_quad,"RKSM-FGS")
-  ╠═╡ =#
 
 # ╔═╡ 0d4d8d06-8b19-4220-b8bb-a66913e00baf
 function plot_quad_errs(df)
@@ -529,31 +475,10 @@ function plot_quad_order(df)
 end
 
 # ╔═╡ 06249b11-4290-46dd-b1fc-4f36c514dc6f
-#=╠═╡
 plot_quad_order(df_quad)
-  ╠═╡ =#
 
 # ╔═╡ 39880b1a-df8e-46b9-a2dd-45b51e47a2c0
-#=╠═╡
 plot_quad_order(df_quad_stltjs_1)
-  ╠═╡ =#
-
-# ╔═╡ 44c37768-5e30-401e-a7f3-af093676387f
-#=╠═╡
-begin
-	b = ones(n1^2)
-	b = b / norm(b)
-end
-  ╠═╡ =#
-
-# ╔═╡ 9c561c24-d0ef-4113-b704-75613714f371
-# ╠═╡ disabled = true
-#=╠═╡
-begin
-	b = randn(n1^2) * 100
-	b = b / norm(b)
-end
-  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2436,7 +2361,9 @@ version = "4.1.0+0"
 # ╠═9f193c2e-48d2-4acd-a569-f1b37f7dbd13
 # ╠═567073e3-c61f-47b5-ade8-e2b12afc23fd
 # ╠═cbb5cba4-9429-480d-9972-49c11549eaf9
+# ╠═8e395c6f-0460-4d97-a88c-f8676ec2778f
 # ╠═3596ff4c-9ec7-45c1-8b8d-5402ed599d88
+# ╠═3f4d8154-eb6b-4213-80bf-ae0b0b67f66f
 # ╠═442fffdc-0fe7-46a8-abeb-021ae9abc0e0
 # ╠═ac33e289-9d15-4bcc-88a8-d9621c394636
 # ╠═46ad7c94-ef59-4080-9f7d-9a6116e4a7be
@@ -2444,6 +2371,7 @@ version = "4.1.0+0"
 # ╠═f0efc690-7974-40b4-89a0-e5b94f47f044
 # ╠═bf16c9e0-c528-4908-b8dd-3c06f10f7b3f
 # ╠═0098f654-391a-4f90-90db-37e30bc94fe7
+# ╠═21e1a276-9ef1-41d0-a1c7-8814f1767263
 # ╠═17ceb2d2-0192-4ecd-9adf-697d9ba698fa
 # ╠═d84fa034-2d55-4640-bbbe-b121bc1867fb
 # ╠═51b0ffb4-5dd1-493a-a16a-0df3641ced46
@@ -2452,7 +2380,9 @@ version = "4.1.0+0"
 # ╠═86db8b9a-2670-4530-94a7-f1e8f0e2eaf8
 # ╠═393eb5e4-ea4f-4b07-9780-a1e8d14be905
 # ╠═5b5c7ed8-8ac6-4bc1-848f-e0c26a938d0e
+# ╠═faba6767-b094-4f63-9499-9bf37f4964fc
 # ╠═215dbca6-f1ac-4c63-b259-b89413156ee4
+# ╠═8fdf8114-9c94-4894-8d2b-37adb926f9c5
 # ╠═9889e59e-2a58-4974-85ac-c38dd43dcb75
 # ╠═08e1d393-38f5-472d-85aa-e08198b49044
 # ╠═d2698ab2-768c-4e4a-bfb2-ce587e7266db

@@ -973,11 +973,11 @@ end
 """
 function _make_integral_function_stieltjes(f, H, Hs, ηs, e1)
 
-    y = Vector{Float64}(undef, size(H, 1))
+    y = Vector{eltype(H)}(undef, size(H, 1))
 
     function F(x, p = nothing)
 
-        ϕ = one(Float64)
+        ϕ = one(eltype(H))
 
         for j in eachindex(Hs)
             _shift_solve_e1!(y, Hs[j], x, e1)
@@ -1058,7 +1058,7 @@ function krylov_approx_quad2(
         H = is_A_hermitian ? H : UpperHessenberg(H)
 
         F = _make_integral_function_stieltjes(f, H, Hs, ηs, e1)
-        prob = IntegralProblem(F, (-Inf, 0.0))
+        prob = IntegralProblem(F, f.limits)
         sol = solve(prob, alg, reltol = quad_tol, abstol = quad_tol)
 
         log_metric!(trace, :quad_err, (k, sol.resid))
@@ -1345,7 +1345,7 @@ function krylov_approx_stieltjes(
 
     _check_sizes(exact, A, b)
 
-    contour = build(contour_type)
+    contour = build(contour_type, f.limits)
     nodes, ω = resolve(contour, order)
     weights = (-f.constant) .* ω .* f.inner.(nodes)
 
